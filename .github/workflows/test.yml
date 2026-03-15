@@ -54,7 +54,7 @@ jobs:
           retention-days: 7
 
   test-windows:
-    runs-on: [self-hosted, WIN-11-WSL2]
+    runs-on: [self-hosted, Windows, X64]
 
     steps:
       - uses: actions/checkout@v4
