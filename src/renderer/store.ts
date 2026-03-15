@@ -7,7 +7,8 @@ import {
   type ReactNode,
 } from "react";
 import { createElement } from "react";
-import type { Project, TerminalSession } from "../shared/types.js";
+import type { Project, TerminalSession, Activity } from "../shared/types.js";
+import { makeTerminalKey } from "../shared/types.js";
 import { bridge } from "./bridge.js";
 
 // State
@@ -18,6 +19,8 @@ export interface AppState {
   activeTerminalKey: string | null;
   fontSize: number;
   sidebarWidth: number;
+  theme: "system" | "dark" | "light";
+  resolvedTheme: "dark" | "light";
 }
 
 const initialState: AppState = {
@@ -26,6 +29,8 @@ const initialState: AppState = {
   activeTerminalKey: null,
   fontSize: 12,
   sidebarWidth: 250,
+  theme: "system",
+  resolvedTheme: "dark",
 };
 
 // Actions
@@ -36,12 +41,16 @@ export type AppAction =
   | { type: "UPDATE_PROJECT"; project: Project }
   | { type: "DELETE_PROJECT"; projectId: string }
   | { type: "ADD_TERMINAL"; terminal: TerminalSession }
+  | { type: "SET_TERMINALS"; terminals: TerminalSession[] }
   | { type: "REMOVE_TERMINAL"; key: string }
   | { type: "SET_ACTIVE"; key: string | null }
   | { type: "UPDATE_STATUS"; terminalId: string; status: "running" | "exited"; exitCode?: number }
-  | { type: "UPDATE_BUSY"; terminalId: string; busy: boolean }
+  | { type: "UPDATE_ACTIVITY"; terminalId: string; activity: Activity; activityText: string }
   | { type: "SET_FONT_SIZE"; fontSize: number }
-  | { type: "SET_SIDEBAR_WIDTH"; sidebarWidth: number };
+  | { type: "SET_SIDEBAR_WIDTH"; sidebarWidth: number }
+  | { type: "SET_THEME"; theme: "system" | "dark" | "light" }
+  | { type: "SET_RESOLVED_THEME"; resolvedTheme: "dark" | "light" }
+  | { type: "REORDER_TERMINAL"; draggedKey: string; beforeKey: string | null };
 
 function reducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
@@ -68,6 +77,8 @@ function reducer(state: AppState, action: AppAction): AppState {
       };
     case "ADD_TERMINAL":
       return { ...state, terminals: [...state.terminals, action.terminal] };
+    case "SET_TERMINALS":
+      return { ...state, terminals: action.terminals };
     case "REMOVE_TERMINAL": {
       const remaining = state.terminals.filter((t) => t.key !== action.key);
       return {
@@ -90,17 +101,47 @@ function reducer(state: AppState, action: AppAction): AppState {
             : t
         ),
       };
-    case "UPDATE_BUSY":
+    case "UPDATE_ACTIVITY":
       return {
         ...state,
         terminals: state.terminals.map((t) =>
-          t.terminalId === action.terminalId ? { ...t, busy: action.busy } : t
+          t.terminalId === action.terminalId
+            ? { ...t, activity: action.activity, activityText: action.activityText }
+            : t
         ),
       };
     case "SET_FONT_SIZE":
       return { ...state, fontSize: action.fontSize };
     case "SET_SIDEBAR_WIDTH":
       return { ...state, sidebarWidth: action.sidebarWidth };
+    case "SET_THEME":
+      return { ...state, theme: action.theme };
+    case "SET_RESOLVED_THEME":
+      return { ...state, resolvedTheme: action.resolvedTheme };
+    case "REORDER_TERMINAL": {
+      const dragged = state.terminals.find((t) => t.key === action.draggedKey);
+      if (!dragged) return state;
+      const without = state.terminals.filter((t) => t.key !== action.draggedKey);
+      if (action.beforeKey === null) {
+        let insertIdx = without.length;
+        for (let i = without.length - 1; i >= 0; i--) {
+          if (without[i].projectId === dragged.projectId) {
+            insertIdx = i + 1;
+            break;
+          }
+        }
+        const result = [...without];
+        result.splice(insertIdx, 0, dragged);
+        return { ...state, terminals: result };
+      }
+      const beforeIdx = without.findIndex((t) => t.key === action.beforeKey);
+      if (beforeIdx === -1) return state;
+      const beforeTerminal = without[beforeIdx];
+      if (beforeTerminal.projectId !== dragged.projectId) return state;
+      const result = [...without];
+      result.splice(beforeIdx, 0, dragged);
+      return { ...state, terminals: result };
+    }
     default:
       return state;
   }
@@ -114,14 +155,76 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState);
 
   useEffect(() => {
-    bridge.project.list().then((projects) => {
-      dispatch({ type: "SET_PROJECTS", projects });
+    async function init() {
+      try {
+        const projects = await bridge.project.list();
+        dispatch({ type: "SET_PROJECTS", projects });
+
+        const projectIds = new Set(projects.map((p) => p.id));
+        const saved = await bridge.terminal.getSavedSessions();
+        if (saved.length) {
+          const terminals = saved
+            .filter((s) => projectIds.has(s.projectId))
+            .map((s) => ({
+              key: makeTerminalKey(s.projectId, s.terminalId),
+              terminalId: s.terminalId,
+              projectId: s.projectId,
+              commandId: s.commandId,
+              branchId: s.branchId,
+              commandName: s.commandName,
+              commandType: s.commandType,
+              status: s.status as "running" | "exited",
+              exitCode: s.exitCode,
+              activity: "idle" as const,
+              activityText: "",
+              restored: true,
+              aiSessionId: s.aiSessionId,
+            }));
+          if (terminals.length) {
+            dispatch({ type: "SET_TERMINALS", terminals });
+            const savedKey = await bridge.terminal.getActiveKey();
+            const validKey = terminals.find((t) => t.key === savedKey)?.key ?? terminals[0].key;
+            dispatch({ type: "SET_ACTIVE", key: validKey });
+          }
+        }
+
+        const settings = await bridge.settings.get();
+        dispatch({ type: "SET_FONT_SIZE", fontSize: settings.fontSize });
+        dispatch({ type: "SET_SIDEBAR_WIDTH", sidebarWidth: settings.sidebarWidth });
+        dispatch({ type: "SET_THEME", theme: settings.theme });
+
+        const isDark = await bridge.theme.getNative();
+        dispatch({ type: "SET_RESOLVED_THEME", resolvedTheme: isDark ? "dark" : "light" });
+      } catch (err) {
+        console.error("Failed to initialize app state:", err);
+      }
+    }
+    init();
+
+    const cleanup = bridge.theme.onNativeChanged((isDark) => {
+      dispatch({ type: "SET_RESOLVED_THEME", resolvedTheme: isDark ? "dark" : "light" });
     });
-    bridge.settings.get().then((settings) => {
-      dispatch({ type: "SET_FONT_SIZE", fontSize: settings.fontSize });
-      dispatch({ type: "SET_SIDEBAR_WIDTH", sidebarWidth: settings.sidebarWidth });
-    });
+    return cleanup;
   }, []);
+
+  // Persist active tab to DB so it survives restart
+  useEffect(() => {
+    if (state.activeTerminalKey) {
+      bridge.terminal.setActiveKey(state.activeTerminalKey);
+    }
+  }, [state.activeTerminalKey]);
+
+  useEffect(() => {
+    if (state.theme === "dark") {
+      dispatch({ type: "SET_RESOLVED_THEME", resolvedTheme: "dark" });
+    } else if (state.theme === "light") {
+      dispatch({ type: "SET_RESOLVED_THEME", resolvedTheme: "light" });
+    } else {
+      bridge.theme.getNative().then((isDark) => {
+        dispatch({ type: "SET_RESOLVED_THEME", resolvedTheme: isDark ? "dark" : "light" });
+      });
+    }
+  }, [state.theme]);
 
   return createElement(AppContext.Provider, { value: { state, dispatch } }, children);
 }

@@ -1,16 +1,28 @@
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { app, BrowserWindow, dialog, globalShortcut, Menu } from "electron";
 import { TerminalManager } from "./terminal-manager.js";
 import { ConfigStore } from "./config-store.js";
+import { SessionStore } from "./session-store.js";
+import { AiSessionTracker } from "./ai-session-tracker.js";
 import { registerIpcHandlers } from "./ipc.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const configStore = new ConfigStore();
+const sessionStore = new SessionStore(path.join(os.homedir(), ".pterm", "pterm.db"));
+const aiSessionTracker = new AiSessionTracker();
 const terminalManager = new TerminalManager();
+terminalManager.setSessionStore(sessionStore);
+terminalManager.setAiSessionTracker(aiSessionTracker);
 
-registerIpcHandlers(terminalManager, configStore);
+// Crash recovery: mark any previously-running sessions as exited
+sessionStore.markAllRunningAsExited();
+// Garbage collect old sessions
+sessionStore.pruneOldSessions(30);
+
+registerIpcHandlers(terminalManager, configStore, sessionStore, () => mainWindow);
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -32,30 +44,29 @@ function createWindow(): void {
     mainWindow.loadFile(path.join(__dirname, "../renderer/index.html"));
   }
 
-  mainWindow.on("close", async (e) => {
-    const termCount = terminalManager.getTerminalCount();
-    if (termCount === 0) return;
+  mainWindow.once("ready-to-show", () => {
+    mainWindow?.show();
+    mainWindow?.focus();
+  });
 
+  mainWindow.on("close", async (e) => {
     e.preventDefault();
 
     const busyCount = terminalManager.getBusyCount();
-    const message =
-      busyCount > 0
-        ? `You have ${termCount} terminal session${termCount > 1 ? "s" : ""} (${busyCount} busy). Close all?`
-        : `You have ${termCount} terminal session${termCount > 1 ? "s" : ""}. Close all?`;
-
-    const { response } = await dialog.showMessageBox(mainWindow!, {
-      type: "question",
-      buttons: ["Close All", "Cancel"],
-      defaultId: 1,
-      cancelId: 1,
-      message,
-    });
-
-    if (response === 0) {
-      await terminalManager.closeAll();
-      mainWindow?.destroy();
+    if (busyCount > 0) {
+      const { response } = await dialog.showMessageBox(mainWindow!, {
+        type: "question",
+        buttons: ["Close", "Cancel"],
+        defaultId: 1,
+        cancelId: 1,
+        message: `You have ${busyCount} busy session${busyCount > 1 ? "s" : ""}. Close and save all sessions?`,
+      });
+      if (response !== 0) return;
     }
+
+    sessionStore.flushAllScrollback();
+    await terminalManager.closeAll();
+    mainWindow?.destroy();
   });
 }
 
@@ -113,7 +124,8 @@ app.on("activate", () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow();
 });
 
-app.on("before-quit", async () => {
-  await terminalManager.closeAll();
+app.on("before-quit", () => {
+  aiSessionTracker.stopAll();
   configStore.flushSync();
+  sessionStore.close();
 });

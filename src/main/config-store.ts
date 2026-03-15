@@ -16,7 +16,7 @@ function defaultConfig(): Config {
       sidebarWidth: 250,
       fontSize: 12,
       defaultProjectCommands: [
-        { id: crypto.randomUUID(), name: "Shell", command: "" },
+        { id: crypto.randomUUID(), name: "Shell", command: "", type: "shell" },
       ],
     },
   };
@@ -68,11 +68,12 @@ export class ConfigStore {
   }
 
   getProjects(): Project[] {
-    return this.config.projects;
+    return structuredClone(this.config.projects);
   }
 
   getProject(id: string): Project | undefined {
-    return this.config.projects.find((p) => p.id === id);
+    const project = this.config.projects.find((p) => p.id === id);
+    return project ? structuredClone(project) : undefined;
   }
 
   createProject(input: ProjectCreateInput): Project {
@@ -83,6 +84,7 @@ export class ConfigStore {
       envVars: input.envVars,
       commands: input.commands,
       branches: [],
+      worktreeCopyFiles: input.worktreeCopyFiles,
     };
     this.config.projects.push(project);
     this.scheduleSave();
@@ -97,6 +99,7 @@ export class ConfigStore {
     if (input.folder !== undefined) project.folder = input.folder;
     if (input.envVars !== undefined) project.envVars = input.envVars;
     if (input.commands !== undefined) project.commands = input.commands;
+    if (input.worktreeCopyFiles !== undefined) project.worktreeCopyFiles = input.worktreeCopyFiles;
 
     this.scheduleSave();
     return project;
@@ -121,6 +124,7 @@ export class ConfigStore {
   updateSettings(input: SettingsUpdateInput): Config["settings"] {
     if (input.fontSize !== undefined) this.config.settings.fontSize = input.fontSize;
     if (input.sidebarWidth !== undefined) this.config.settings.sidebarWidth = input.sidebarWidth;
+    if (input.theme !== undefined) this.config.settings.theme = input.theme;
     this.scheduleSave();
     return this.config.settings;
   }

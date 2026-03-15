@@ -1,9 +1,18 @@
 export type ShellType = "default" | "bash" | "zsh" | "cmd" | "powershell" | "wsl";
 
+export function makeTerminalKey(projectId: string, terminalId: string): string {
+  return `${projectId}:${terminalId}`;
+}
+
+export type CommandType = "shell" | "claude" | "codex";
+
+export type Activity = "idle" | "busy" | "working" | "waiting";
+
 export interface Command {
   id: string;
   name: string;
   command: string;
+  type: CommandType;
   shell?: ShellType;
 }
 
@@ -21,6 +30,8 @@ export interface Project {
   envVars: Record<string, string>;
   commands: Command[];
   branches: ProjectBranch[];
+  /** Glob patterns of files to copy into new worktrees (e.g. ".env", ".env.local") */
+  worktreeCopyFiles: string[];
 }
 
 export interface Config {
@@ -41,9 +52,13 @@ export interface TerminalSession {
   terminalId: string;
   commandId?: string;
   commandName: string;
+  commandType: CommandType;
   status: "running" | "exited";
-  busy: boolean;
+  activity: Activity;
+  activityText: string;
   exitCode?: number;
+  restored?: boolean;
+  aiSessionId?: string;
 }
 
 // IPC input types
@@ -72,6 +87,27 @@ export interface TerminalCloseInput {
   terminalId: string;
 }
 
+export interface TerminalRestoreInput {
+  terminalId: string;
+  cols: number;
+  rows: number;
+}
+
+export interface SavedSession {
+  terminalId: string;
+  projectId: string;
+  commandId?: string;
+  branchId?: string;
+  commandName: string;
+  commandType: CommandType;
+  status: "running" | "exited";
+  exitCode?: number;
+  cwd: string;
+  cols: number;
+  rows: number;
+  aiSessionId?: string;
+}
+
 export interface TerminalRestartInput {
   terminalId: string;
 }
@@ -81,6 +117,7 @@ export interface ProjectCreateInput {
   folder: string;
   envVars: Record<string, string>;
   commands: Command[];
+  worktreeCopyFiles: string[];
 }
 
 export interface ProjectUpdateInput {
@@ -89,6 +126,7 @@ export interface ProjectUpdateInput {
   folder?: string;
   envVars?: Record<string, string>;
   commands?: Command[];
+  worktreeCopyFiles?: string[];
 }
 
 export interface BranchCreateInput {
@@ -103,9 +141,21 @@ export interface BranchDeleteInput {
 
 // Preload bridge shape
 
+export interface DetectedCommand {
+  name: string;
+  command: string;
+  type: CommandType;
+}
+
 export interface SettingsUpdateInput {
   fontSize?: number;
   sidebarWidth?: number;
+  theme?: "system" | "dark" | "light";
+}
+
+export interface ActivityUpdate {
+  activity: Activity;
+  activityText: string;
 }
 
 export interface PtermBridge {
@@ -115,12 +165,16 @@ export interface PtermBridge {
     resize: (input: TerminalResizeInput) => Promise<void>;
     close: (input: TerminalCloseInput) => Promise<void>;
     restart: (input: TerminalRestartInput) => Promise<void>;
+    restore: (input: TerminalRestoreInput) => Promise<{ scrollback: string[]; respawned: boolean }>;
+    getSavedSessions: () => Promise<SavedSession[]>;
+    setActiveKey: (key: string) => Promise<void>;
+    getActiveKey: () => Promise<string | null>;
     onData: (terminalId: string, cb: (data: string) => void) => void;
     offData: (terminalId: string) => void;
     onExit: (terminalId: string, cb: (data: { exitCode: number; signal?: number }) => void) => void;
     offExit: (terminalId: string) => void;
-    onBusy: (terminalId: string, cb: (busy: boolean) => void) => void;
-    offBusy: (terminalId: string) => void;
+    onActivity: (terminalId: string, cb: (data: ActivityUpdate) => void) => void;
+    offActivity: (terminalId: string) => void;
   };
   project: {
     list: () => Promise<Project[]>;
@@ -141,6 +195,12 @@ export interface PtermBridge {
   };
   shell: {
     openExternal: (url: string) => Promise<void>;
+    detectWsl: () => Promise<string[]>;
+    detectCommands: () => Promise<DetectedCommand[]>;
+  };
+  theme: {
+    getNative: () => Promise<boolean>;
+    onNativeChanged: (cb: (isDark: boolean) => void) => () => void;
   };
   platform: string;
 }

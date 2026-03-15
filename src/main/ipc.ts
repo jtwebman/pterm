@@ -1,10 +1,11 @@
-import { ipcMain, dialog, shell } from "electron";
+import { ipcMain, dialog, shell, nativeTheme } from "electron";
 import type {
   TerminalOpenInput,
   TerminalWriteInput,
   TerminalResizeInput,
   TerminalCloseInput,
   TerminalRestartInput,
+  TerminalRestoreInput,
   ProjectCreateInput,
   ProjectUpdateInput,
   BranchCreateInput,
@@ -13,11 +14,17 @@ import type {
 } from "../shared/types.js";
 import type { TerminalManager } from "./terminal-manager.js";
 import type { ConfigStore } from "./config-store.js";
+import type { SessionStore } from "./session-store.js";
 import { createBranch, deleteBranch } from "./branch-manager.js";
+import { detectWslDistros } from "./shell-resolver.js";
+import { detectCommands } from "./command-detector.js";
+import type { BrowserWindow } from "electron";
 
 export function registerIpcHandlers(
   terminalManager: TerminalManager,
   configStore: ConfigStore,
+  sessionStore: SessionStore,
+  getMainWindow: () => BrowserWindow | null,
 ): void {
   // Terminal
   ipcMain.handle("terminal:open", (event, input: TerminalOpenInput) => {
@@ -42,7 +49,23 @@ export function registerIpcHandlers(
   });
 
   ipcMain.handle("terminal:close", (_event, input: TerminalCloseInput) => {
-    return terminalManager.close(input.terminalId);
+    return terminalManager.closeAndDelete(input.terminalId);
+  });
+
+  ipcMain.handle("terminal:restore", (event, input: TerminalRestoreInput) => {
+    return terminalManager.restore(event.sender, input.terminalId, input.cols, input.rows, configStore);
+  });
+
+  ipcMain.handle("terminal:get-saved-sessions", () => {
+    return sessionStore.loadAllSessions();
+  });
+
+  ipcMain.handle("terminal:set-active-key", (_event, key: string) => {
+    sessionStore.setMeta("activeTerminalKey", key);
+  });
+
+  ipcMain.handle("terminal:get-active-key", () => {
+    return sessionStore.getMeta("activeTerminalKey");
   });
 
   ipcMain.handle("terminal:restart", (event, input: TerminalRestartInput) => {
@@ -89,7 +112,7 @@ export function registerIpcHandlers(
     const branch = project.branches.find((b) => b.id === input.branchId);
     if (!branch) throw new Error(`Branch not found: ${input.branchId}`);
 
-    await deleteBranch(branch);
+    await deleteBranch(project, branch);
     configStore.removeBranch(input.projectId, input.branchId);
   });
 
@@ -110,6 +133,29 @@ export function registerIpcHandlers(
   });
 
   ipcMain.handle("shell:open-external", (_event, url: string) => {
+    if (!/^https?:\/\//.test(url)) return;
     return shell.openExternal(url);
+  });
+
+  // WSL detection
+  ipcMain.handle("shell:detect-wsl", () => {
+    return detectWslDistros();
+  });
+
+  // Command detection
+  ipcMain.handle("shell:detect-commands", () => {
+    return detectCommands();
+  });
+
+  // Theme
+  ipcMain.handle("theme:get-native", () => {
+    return nativeTheme.shouldUseDarkColors;
+  });
+
+  nativeTheme.on("updated", () => {
+    const win = getMainWindow();
+    if (win) {
+      win.webContents.send("theme:native-changed", nativeTheme.shouldUseDarkColors);
+    }
   });
 }
