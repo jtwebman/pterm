@@ -52,3 +52,35 @@ jobs:
           name: playwright-traces-${{ matrix.os }}
           path: test-results/
           retention-days: 7
+
+  test-windows:
+    runs-on: [self-hosted, WIN-11-WSL2]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Rebuild native modules for Electron
+        run: npx electron-builder install-app-deps
+
+      - name: Build
+        run: npm run build
+
+      - name: Run tests
+        run: npx playwright test
+        env:
+          CI: true
+
+      - name: Upload test artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces-windows
+          path: test-results/
+          retention-days: 7
