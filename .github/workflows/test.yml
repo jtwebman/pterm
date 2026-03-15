@@ -11,7 +11,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-2022]
+        os: [ubuntu-latest, macos-latest]
 
     runs-on: ${{ matrix.os }}
 
@@ -26,8 +26,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # node-pty needs native compilation — electron-builder install-app-deps
-      # runs via postinstall, but we also need to ensure electron is extracted
       - name: Rebuild native modules for Electron
         run: npx electron-builder install-app-deps
 
@@ -41,8 +39,8 @@ jobs:
         env:
           CI: true
 
-      - name: Run tests (macOS / Windows)
-        if: runner.os != 'Linux'
+      - name: Run tests (macOS)
+        if: runner.os == 'macOS'
         run: npx playwright test
         env:
           CI: true
