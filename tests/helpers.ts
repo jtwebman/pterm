@@ -12,7 +12,10 @@ export async function launchApp(tmpDir: string): Promise<{
   page: Page;
 }> {
   const app = await electron.launch({
-    args: [path.join(ROOT, "dist/main/index.mjs")],
+    args: [
+      ...(process.env.CI ? ["--no-sandbox", "--disable-gpu-sandbox"] : []),
+      path.join(ROOT, "dist/main/index.mjs"),
+    ],
     env: {
       ...process.env,
       // Isolate config + DB to temp dir so tests are hermetic
@@ -30,16 +33,26 @@ export async function launchApp(tmpDir: string): Promise<{
 }
 
 /**
- * Cleanly shut down the app. Evaluates app.quit() in the main process
- * to avoid fighting with the close handler's preventDefault.
+ * Cleanly shut down the app. Force-closes all windows then exits,
+ * with a timeout fallback to process.exit().
  */
-export async function closeApp(app: ElectronApplication): Promise<void> {
+export async function closeApp(app: ElectronApplication | undefined): Promise<void> {
+  if (!app) return;
   try {
-    await app.evaluate(async ({ app }) => {
+    await app.evaluate(async ({ app, BrowserWindow }) => {
+      // Force-close all windows without triggering the close handler
+      for (const win of BrowserWindow.getAllWindows()) {
+        win.removeAllListeners("close");
+        win.destroy();
+      }
       app.quit();
     });
   } catch {
     // App may already be closed
   }
-  await app.close();
+  try {
+    await app.close();
+  } catch {
+    // Process may have already exited
+  }
 }
