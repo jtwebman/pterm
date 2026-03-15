@@ -13,7 +13,7 @@ export async function launchApp(tmpDir: string): Promise<{
 }> {
   const app = await electron.launch({
     args: [
-      ...(process.env.CI ? ["--no-sandbox", "--disable-gpu-sandbox"] : []),
+      ...(process.env.CI && process.platform === "linux" ? ["--no-sandbox", "--disable-gpu-sandbox"] : []),
       path.join(ROOT, "dist/main/index.mjs"),
     ],
     env: {
