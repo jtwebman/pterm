@@ -26,12 +26,12 @@ async function createProject(page: Page, name: string, folder: string) {
   await page.getByPlaceholder("My Project").fill(name);
   await page.getByPlaceholder("/path/to/project").fill(folder);
   await page.getByRole("button", { name: "Create" }).click();
-  await expect(page.getByText(name)).toBeVisible();
+  await expect(page.getByText(name).first()).toBeVisible();
 }
 
 // Helper: launch a shell terminal for the current project
 async function launchShellTerminal(page: Page) {
-  await page.getByTitle("New terminal").click();
+  await page.getByTitle("New terminal").first().click();
   // Select the "Shell" command explicitly (auto-detect may default to claude/codex)
   const shellBtn = page.locator("button", { hasText: "Shell" }).first();
   await shellBtn.click();
