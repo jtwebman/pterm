@@ -18,27 +18,13 @@ export function CommandPicker({ project, asModal, onClose, defaultBranchId }: Pr
   const [selectedCommandId, setSelectedCommandId] = useState<string>(
     project.commands[0]?.id ?? ""
   );
-  const hasBranches = project.branches.length > 0;
   const branchScoped = defaultBranchId !== undefined;
-
-  const [branchMode, setBranchMode] = useState<"main" | "existing" | "new">(
-    branchScoped
-      ? (defaultBranchId === null ? "main" : "existing")
-      : "main"
-  );
-  const [selectedBranchId, setSelectedBranchId] = useState<string>(
-    defaultBranchId ?? project.branches[0]?.id ?? ""
-  );
-  const [newBranchName, setNewBranchName] = useState("");
   const { dispatch } = useApp();
 
   const isOpen = asModal || open;
 
   function reset() {
     setSelectedCommandId(project.commands[0]?.id ?? "");
-    setBranchMode(branchScoped ? (defaultBranchId === null ? "main" : "existing") : "main");
-    setSelectedBranchId(defaultBranchId ?? project.branches[0]?.id ?? "");
-    setNewBranchName("");
     if (asModal) {
       onClose?.();
     } else {
@@ -50,21 +36,7 @@ export function CommandPicker({ project, asModal, onClose, defaultBranchId }: Pr
     const command = project.commands.find((c) => c.id === selectedCommandId);
     if (!command) return;
 
-    let branchId: string | undefined;
-
-    if (branchMode === "existing" && selectedBranchId) {
-      branchId = selectedBranchId;
-    } else if (branchMode === "new" && newBranchName.trim()) {
-      const branch = await bridge.branch.create({
-        projectId: project.id,
-        name: newBranchName.trim(),
-      });
-      branchId = branch.id;
-      // Refresh project in store so the new branch appears in the sidebar
-      const projects = await bridge.project.list();
-      const updated = projects.find((p) => p.id === project.id);
-      if (updated) dispatch({ type: "UPDATE_PROJECT", project: updated });
-    }
+    const branchId = branchScoped && defaultBranchId ? defaultBranchId : undefined;
 
     const terminalId = crypto.randomUUID();
     const key = makeTerminalKey(project.id, terminalId);
@@ -131,77 +103,6 @@ export function CommandPicker({ project, asModal, onClose, defaultBranchId }: Pr
             )}
           </div>
 
-          {/* Working directory / branch — hidden when scoped to a specific branch */}
-          {!branchScoped && (
-            <div>
-              <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1.5">
-                Working Directory
-              </label>
-              <div className="space-y-2">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="branch"
-                    checked={branchMode === "main"}
-                    onChange={() => setBranchMode("main")}
-                    className="accent-blue-500"
-                  />
-                  <span className="text-sm text-gray-700 dark:text-gray-300">
-                    Project folder
-                    <span className="text-xs text-gray-400 dark:text-gray-500 ml-1.5">{project.folder}</span>
-                  </span>
-                </label>
-                {hasBranches && (
-                  <>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="branch"
-                        checked={branchMode === "existing"}
-                        onChange={() => setBranchMode("existing")}
-                        className="accent-blue-500"
-                      />
-                      <span className="text-sm text-gray-700 dark:text-gray-300">Existing branch</span>
-                    </label>
-                    {branchMode === "existing" && (
-                      <select
-                        value={selectedBranchId}
-                        onChange={(e) => setSelectedBranchId(e.target.value)}
-                        className="w-full ml-6 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded px-3 py-1.5 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-blue-500"
-                      >
-                        {project.branches.map((b) => (
-                          <option key={b.id} value={b.id}>{b.name}</option>
-                        ))}
-                      </select>
-                    )}
-                  </>
-                )}
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="branch"
-                    checked={branchMode === "new"}
-                    onChange={() => setBranchMode("new")}
-                    className="accent-blue-500"
-                  />
-                  <span className="text-sm text-gray-700 dark:text-gray-300">New branch</span>
-                </label>
-                {branchMode === "new" && (
-                  <input
-                    type="text"
-                    value={newBranchName}
-                    onChange={(e) => setNewBranchName(e.target.value)}
-                    placeholder="Branch name"
-                    autoFocus
-                    className="w-full ml-6 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded px-3 py-1.5 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-blue-500"
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") handleLaunch();
-                    }}
-                  />
-                )}
-              </div>
-            </div>
-          )}
         </div>
 
         <div className="px-5 py-3 border-t border-gray-200 dark:border-gray-800 flex justify-end gap-2">
@@ -213,11 +114,7 @@ export function CommandPicker({ project, asModal, onClose, defaultBranchId }: Pr
           </button>
           <button
             onClick={handleLaunch}
-            disabled={
-              !selectedCommandId ||
-              (branchMode === "existing" && !selectedBranchId) ||
-              (branchMode === "new" && !newBranchName.trim())
-            }
+            disabled={!selectedCommandId}
             className="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded"
           >
             Launch
@@ -235,7 +132,7 @@ export function CommandPicker({ project, asModal, onClose, defaultBranchId }: Pr
     <>
       <button
         onClick={() => setOpen(true)}
-        className="opacity-0 group-hover:opacity-100 text-gray-400 dark:text-gray-500 hover:text-gray-900 dark:hover:text-gray-200 px-1"
+        className="opacity-0 group-hover:opacity-100 text-gray-400 dark:text-gray-500 hover:text-gray-900 dark:hover:text-gray-200 w-5 h-5 flex items-center justify-center text-sm"
         title="New terminal"
       >
         +

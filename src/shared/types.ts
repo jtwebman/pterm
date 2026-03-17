@@ -267,6 +267,7 @@ export interface PtermBridge {
   };
   git: {
     getBranch: (folder: string) => Promise<string | null>;
+    listBranches: (folder: string) => Promise<string[]>;
     checkout: (folder: string, branch: string) => Promise<void>;
     watchBranch: (folder: string) => Promise<void>;
     unwatchBranch: (folder: string) => Promise<void>;

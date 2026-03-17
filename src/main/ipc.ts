@@ -145,6 +145,18 @@ export function registerIpcHandlers(
     }
   });
 
+  ipcMain.handle("git:list-branches", async (_event, folder: string) => {
+    try {
+      const { stdout } = await execFile("git", ["branch", "--list", "--all", "--no-color"], { cwd: folder });
+      return stdout
+        .split("\n")
+        .map((line) => line.replace(/^\*?\s+/, "").replace(/^remotes\/origin\//, "").trim())
+        .filter((name) => name && !name.includes("HEAD ->"));
+    } catch {
+      return [];
+    }
+  });
+
   ipcMain.handle("git:checkout", async (_event, folder: string, branch: string) => {
     await execFile("git", ["checkout", branch], { cwd: folder });
   });

@@ -73,6 +73,7 @@ contextBridge.exposeInMainWorld("ptermBridge", {
   },
   git: {
     getBranch: (folder: string) => ipcRenderer.invoke("git:get-branch", folder),
+    listBranches: (folder: string) => ipcRenderer.invoke("git:list-branches", folder),
     checkout: (folder: string, branch: string) => ipcRenderer.invoke("git:checkout", folder, branch),
     watchBranch: (folder: string) => ipcRenderer.invoke("git:watch-branch", folder),
     unwatchBranch: (folder: string) => ipcRenderer.invoke("git:unwatch-branch", folder),

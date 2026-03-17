@@ -111,23 +111,24 @@ test("create branch, verify sidebar, delete via branch manager", async () => {
 
   await createProject(page, "Branch Test", projectDir);
 
-  // Open CommandPicker (the + button on the project)
+  // Open branch manager via the branch icon on the project header
   const projectHeader = page.locator(".group", { hasText: "Branch Test" }).first();
   await projectHeader.hover();
   await page.waitForTimeout(200);
-  await projectHeader.getByTitle("New terminal").click();
+  await projectHeader.getByTitle("Manage branches").click();
 
-  // Select the "Shell" command explicitly (auto-detect may default to claude/codex)
-  const shellBtn = page.locator("button", { hasText: "Shell" }).first();
-  await shellBtn.click();
+  // Branch manager dialog should be open
+  await expect(page.getByText("Branches — Branch Test")).toBeVisible();
 
-  // Select "New branch" radio and enter branch name
-  await page.getByText("New branch").click();
-  await page.getByPlaceholder("Branch name").fill("test-feature");
-  await page.getByRole("button", { name: "Launch" }).click();
+  // Create a new worktree branch
+  await page.getByPlaceholder("Branch name...").fill("test-feature");
+  await page.getByRole("button", { name: "Create" }).click();
 
-  // Wait for terminal to appear
-  await expect(page.locator(".xterm-screen")).toBeVisible({ timeout: 5_000 });
+  // Wait for the branch to appear in the worktree branches list
+  await expect(page.getByTitle("Delete branch")).toBeVisible({ timeout: 5_000 });
+
+  // Close branch manager
+  await page.getByRole("button", { name: "Close" }).click();
 
   // Verify branch group appears in sidebar
   await expect(page.getByText("test-feature").first()).toBeVisible({ timeout: 3_000 });
@@ -138,19 +139,10 @@ test("create branch, verify sidebar, delete via branch manager", async () => {
   const worktreeContents = fs.readdirSync(worktreeDir, { recursive: true });
   expect(worktreeContents.length).toBeGreaterThan(0);
 
-  // Close the terminal first so the branch can be deleted cleanly
-  const tab = page.locator(".group", { hasText: "Shell" }).first();
-  await tab.hover();
-  await page.waitForTimeout(200);
-  await tab.locator("button").last().click();
-  await expect(page.locator(".xterm-screen")).not.toBeVisible({ timeout: 3_000 });
-
-  // Hover over project header to reveal branch manager button
+  // Re-open branch manager to delete the branch
   await projectHeader.hover();
   await page.waitForTimeout(200);
   await projectHeader.getByTitle("Manage branches").click();
-
-  // Branch manager dialog should be open with our branch listed
   await expect(page.getByText("Branches — Branch Test")).toBeVisible();
 
   // Click the delete button (×) next to the branch

@@ -36,20 +36,18 @@ export function ProjectItem({ project, onEdit }: Props) {
         <span className="truncate flex-1 text-gray-800 dark:text-gray-200 font-medium">{project.name}</span>
         <button
           onClick={() => onEdit(project)}
-          className="opacity-0 group-hover:opacity-100 text-gray-400 dark:text-gray-500 hover:text-gray-900 dark:hover:text-gray-200"
+          className="opacity-0 group-hover:opacity-100 text-gray-400 dark:text-gray-500 hover:text-gray-900 dark:hover:text-gray-200 w-5 h-5 flex items-center justify-center text-sm"
           title="Edit project"
         >
           &#x2699;
         </button>
-        {project.branches.length > 0 && (
-          <button
-            onClick={() => setShowBranchManager(true)}
-            className="opacity-0 group-hover:opacity-100 text-gray-400 dark:text-gray-500 hover:text-gray-900 dark:hover:text-gray-200"
-            title="Manage branches"
-          >
-            &#x2442;
-          </button>
-        )}
+        <button
+          onClick={() => setShowBranchManager(true)}
+          className="opacity-0 group-hover:opacity-100 text-gray-400 dark:text-gray-500 hover:text-gray-900 dark:hover:text-gray-200 w-5 h-5 flex items-center justify-center text-sm"
+          title="Manage branches"
+        >
+          &#x2442;
+        </button>
         <CommandPicker project={project} />
       </div>
       {!collapsed && (
