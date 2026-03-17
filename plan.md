@@ -21,7 +21,7 @@ A cross-platform desktop app — a terminal multiplexer organized around **proje
 - **Electron 41** — cross-platform desktop shell
 - **Node 24** — native TypeScript (`--experimental-strip-types`)
 - **React 19 + Vite** — frontend renderer
-- **@xterm/xterm + @xterm/addon-fit** — terminal rendering
+- **@xterm/xterm + @xterm/addon-fit + @xterm/addon-search + @xterm/addon-web-links** — terminal rendering
 - **node-pty 1.1** — cross-platform PTY spawning (in Electron main process), requires `@electron/rebuild`
 - **tsdown** — bundles main + preload TypeScript
 - **Electron IPC** — communication between main and renderer (no WebSocket, no separate server)
@@ -30,7 +30,7 @@ A cross-platform desktop app — a terminal multiplexer organized around **proje
 - **JSON file** — config persistence (`~/.pterm/config.json`)
 - **crypto.randomUUID()** — ID generation (no nanoid dependency)
 
-No Effect.ts, no SQLite, no schema validation libraries, no WebSocket server, no Zustand, no nanoid. Plain TypeScript + async/await + Electron IPC + React built-ins.
+No Effect.ts, no schema validation libraries, no WebSocket server, no Zustand, no nanoid. Plain TypeScript + async/await + Electron IPC + React built-ins.
 
 ### Why Electron IPC instead of WebSocket?
 
@@ -50,11 +50,22 @@ interface Config {
   projects: Project[];
   settings: {
     theme: "system" | "dark" | "light";
+    terminalTheme?: string;           // default terminal color theme ID
     sidebarWidth: number;
     defaultShell?: ShellType;
     fontSize: number;
     defaultProjectCommands: Command[];
+    customThemes?: CustomTerminalTheme[];
   };
+}
+
+interface CustomTerminalTheme {
+  id: string;
+  name: string;
+  variant: "dark" | "light";
+  colors: { background, foreground, cursor, cursorAccent, selectionBackground,
+            selectionForeground, black, red, green, yellow, blue, magenta,
+            cyan, white, brightBlack..brightWhite: string };
 }
 
 interface Project {
@@ -64,12 +75,16 @@ interface Project {
   envVars: Record<string, string>;
   commands: Command[];
   branches: ProjectBranch[];
+  terminalTheme?: string;  // per-project theme override
 }
+
+type CommandType = "shell" | "claude" | "codex";
 
 interface Command {
   id: string;
   name: string;         // "Shell", "Codex", "Claude", "npm run dev"
   command: string;      // "" (empty = default shell), "codex", "claude", etc.
+  type: CommandType;    // drives activity detection strategy
   shell?: ShellType;    // override shell for this command
 }
 
@@ -82,6 +97,8 @@ interface ProjectBranch {
   createdAt: string;    // ISO date
 }
 
+type Activity = "idle" | "busy" | "working" | "waiting";
+
 // Client-side only (React context + useReducer)
 interface TerminalSession {
   key: string;          // "projectId:terminalId"
@@ -90,8 +107,10 @@ interface TerminalSession {
   terminalId: string;
   commandId?: string;   // which command was used to launch
   commandName: string;
+  commandType: CommandType;
   status: "running" | "exited";
-  busy: boolean;        // true if shell has child processes (polled every 2-3s)
+  activity: Activity;   // idle/busy/working/waiting — driven by activity-detector
+  activityText: string; // human-readable status ("Running", "Using tools", etc.)
   exitCode?: number;
 }
 ```
@@ -142,7 +161,10 @@ pterm/
 │   │   ├── shell-resolver.ts              # cross-platform shell fallback chains
 │   │   ├── config-store.ts                # JSON file CRUD for projects + settings
 │   │   ├── branch-manager.ts              # folder copy/delete
-│   │   └── env-filter.ts                  # strip Electron/Node/npm vars, merge project env
+│   │   ├── env-filter.ts                  # strip Electron/Node/npm vars, merge project env
+│   │   ├── activity-detector.ts           # per-command-type activity detection (shell/claude/codex)
+│   │   ├── claude-hooks.ts                # generates Claude CLI hooks for activity fast-path
+│   │   └── command-detector.ts            # detects available CLI tools (claude, codex) on PATH
 │   │
 │   ├── preload/
 │   │   └── index.ts                       # contextBridge: ptermBridge
@@ -153,14 +175,19 @@ pterm/
 │   │   ├── index.css                      # tailwind
 │   │   ├── bridge.ts                      # ptermBridge type + accessor
 │   │   ├── store.ts                       # React context + useReducer: projects, terminals, settings
+│   │   ├── themes.ts                      # 10 built-in themes + custom theme support + resolver
 │   │   └── components/
-│   │       ├── Sidebar.tsx                # project list, Ctrl+wheel zoom
-│   │       ├── ProjectItem.tsx            # collapsible project with terminals
+│   │       ├── Sidebar.tsx                # project list, Ctrl+wheel zoom, theme selectors
+│   │       ├── ProjectItem.tsx            # collapsible project with branch-grouped terminals
+│   │       ├── BranchGroup.tsx            # branch/folder node with git branch label, scoped [+]
+│   │       ├── BranchManager.tsx          # branch management dialog (checkout, delete worktrees)
 │   │       ├── TerminalTab.tsx            # terminal entry with status dot + close
-│   │       ├── TerminalPane.tsx           # xterm.js viewport, copy/paste, Ctrl+wheel zoom
-│   │       ├── CommandPicker.tsx          # modal: pick command + branch, launch terminal
-│   │       ├── ProjectConfigDialog.tsx    # edit name, folder, env, commands
-│   │       └── EmptyState.tsx             # first-run welcome
+│   │       ├── TerminalPane.tsx           # xterm.js viewport, copy/paste, Ctrl+wheel zoom, padding
+│   │       ├── CommandPicker.tsx          # modal: pick command + branch (main/existing/new)
+│   │       ├── ProjectConfigDialog.tsx    # edit name, folder, env, commands, terminal theme
+│   │       ├── ThemeEditor.tsx            # custom theme creator/editor with live preview
+│   │       ├── EmptyState.tsx             # first-run welcome
+│   │       └── SearchBar.tsx              # terminal search UI (Ctrl+F)
 │   │
 │   └── shared/
 │       └── types.ts                       # all shared types + IPC input shapes + bridge interface
@@ -189,6 +216,15 @@ All communication uses Electron's built-in IPC. No WebSocket needed.
 | `settings:update` | Update settings (persisted to config.json) |
 | `dialog:pick-folder` | Open native folder picker |
 | `shell:open-external` | Open URL in browser |
+| `shell:detect-wsl` | List available WSL distros |
+| `shell:detect-commands` | Check PATH for claude, codex, shell |
+| `theme:get-native` | Get system dark/light preference |
+| `terminal:set-order` | Save terminal key order (JSON array in meta) |
+| `terminal:get-order` | Load saved terminal key order |
+| `git:get-branch` | Run `git rev-parse --abbrev-ref HEAD` in folder |
+| `git:checkout` | Run `git checkout <branch>` in folder |
+| `git:watch-branch` | Start `fs.watch` on `.git/HEAD` for live branch detection |
+| `git:unwatch-branch` | Stop watching `.git/HEAD` |
 
 ### Push Events (webContents.send → ipcRenderer.on)
 
@@ -198,7 +234,9 @@ Per-terminal scoped channels — no dispatch/filtering needed in renderer:
 |---------|---------|
 | `terminal:data:{terminalId}` | PTY output chunk |
 | `terminal:exit:{terminalId}` | PTY process exited (exitCode, signal) |
-| `terminal:busy:{terminalId}` | Activity state changed (busy: boolean) |
+| `terminal:activity:{terminalId}` | Activity state changed (activity + activityText) |
+| `theme:native-changed` | System dark/light preference changed |
+| `git:branch-changed` | Git branch changed in watched folder (folder, branch) |
 
 ## Key Implementation Details
 
@@ -230,10 +268,14 @@ Per-terminal scoped channels — no dispatch/filtering needed in renderer:
 - **Dev only**: Ctrl+Shift+I toggles DevTools (only when `VITE_DEV_SERVER_URL` is set)
 
 ### Activity Detection
-- Poll child processes every 2.5s per terminal
-- Unix: `pgrep -P <shellPid>` (fallback: `ps -eo pid=,ppid=`)
-- Windows: `Get-CimInstance Win32_Process -Filter "ParentProcessId=<pid>"`
-- Sidebar shows status dot: green (idle), yellow (busy), gray (exited)
+- Poll every 2.5s per terminal, strategy depends on `CommandType`
+- **Shell strategy**: `pgrep -P <pid>` (Unix), PowerShell WMI (Windows) — detects child processes
+- **Claude strategy**: walks process tree to find Claude CLI, reads JSONL transcript from `~/.claude/sessions/` to determine state (idle → busy → working → waiting). Fast-path via `PTERM_ACTIVITY_FILE` written by Claude hooks.
+- **Codex strategy**: similar transcript-based detection from `~/.codex/sessions/`
+- 30s stale guard on activity files to detect crashed sessions
+- **Claude hooks** (`claude-hooks.ts`): generates temp hook config injected via env, writes activity state to per-terminal file on `UserPromptSubmit`, `PreToolUse`, `Stop` events
+- **Status dot colors**: green (working/busy), yellow (waiting for input), gray (idle/exited)
+- **Activity text**: shown as sub-text in sidebar terminal tabs ("Running", "Using tools", "Waiting for input", etc.)
 
 ### Close Confirmation
 - Intercept `BrowserWindow.on('close')` event
@@ -274,16 +316,31 @@ Per-terminal scoped channels — no dispatch/filtering needed in renderer:
 12. Platform-appropriate menus (Mac app menu, no menu on Windows/Linux)
 13. Dev-only DevTools shortcut (Ctrl+Shift+I)
 
-### Phase 3: Polish
-1. Dark/light theme with xterm theme sync
-2. Keyboard shortcuts (Ctrl+T new terminal, Ctrl+W close, Ctrl+Tab switch)
+### Phase 3: Polish ✅
+1. Dark/light theme with xterm theme sync (system/dark/light cycle, VS Code color themes)
+2. Keyboard shortcuts (Ctrl+T new terminal, Ctrl+Tab/Shift+Tab cycle, Ctrl+F search)
 3. WSL2 detection + shell option on Windows
 4. Default command detection (check if codex/claude are on PATH)
-5. Clickable file paths and URLs in terminal output
-6. Terminal search (Ctrl+F)
+5. Clickable URLs in terminal output (xterm WebLinksAddon → openExternal)
+6. Terminal search (Ctrl+F with SearchBar component + xterm SearchAddon)
 7. Tab reordering via drag and drop
+8. Smart activity detection per command type (shell/claude/codex) with Claude hooks fast-path
 
-### Phase 4: Packaging
+### Phase 4: Branch-Aware Sidebar + Themes ✅
+1. Git branch detection IPC (`git:get-branch`, `git:checkout`, `git:watch-branch`, `git:unwatch-branch`)
+2. Live branch detection via `fs.watch` on `.git/HEAD` (no polling)
+3. `BranchGroup` component — collapsible branch nodes with git branch labels
+4. `ProjectItem` restructured to group terminals by branch
+5. `CommandPicker` updated — existing branch selection, `defaultBranchId` prop for scoped [+] buttons
+6. `BranchManager` dialog — switch branches on main folder, delete worktree branches
+7. Terminal padding (4px top/left/bottom)
+8. Terminal order persistence across restarts (saved in meta table)
+9. 10 built-in terminal color themes (VS Code Dark/Light, Dracula, Nord, Catppuccin Mocha, Solarized Dark/Light, Gruvbox Dark, Tokyo Night, Monokai)
+10. Per-project terminal theme override
+11. Custom theme editor with color pickers, hex inputs, and live preview
+12. `@types/react` and `@types/react-dom` v19 added for type checking
+
+### Phase 5: Packaging
 1. electron-builder config for Mac (dmg), Windows (NSIS), Linux (AppImage)
 2. Code signing setup
 3. Auto-update setup
@@ -292,5 +349,6 @@ Per-terminal scoped channels — no dispatch/filtering needed in renderer:
 
 1. **Phase 1 done** ✅: Electron window opens, can spawn a PTY via IPC, type commands in devtools console
 2. **Phase 2 done** ✅: Full UI works — create project, open terminals, run commands, switch between them, font zoom, sidebar resize, copy/paste
-3. **Phase 3 done**: Theme switching, keyboard shortcuts, clickable links, terminal search
-4. **Phase 4 done**: Packaged app launches and works on target platform
+3. **Phase 3 done** ✅: Theme switching, keyboard shortcuts, terminal search, clickable URLs, drag-and-drop tab reordering, smart activity detection (shell/claude/codex), WSL2 + command detection
+4. **Phase 4 done** ✅: Branch-aware sidebar tree, live git branch detection, terminal themes (10 built-in + custom editor), per-project theme overrides, terminal padding, order persistence
+5. **Phase 5 done**: Packaged app launches and works on target platform

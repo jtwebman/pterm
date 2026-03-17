@@ -1,6 +1,14 @@
 import type { ITheme } from "@xterm/xterm";
 
-export const DARK_THEME: ITheme = {
+export interface TerminalTheme {
+  name: string;
+  variant: "dark" | "light";
+  theme: ITheme;
+}
+
+// Built-in themes
+
+const vscodeDark: ITheme = {
   background: "#1e1e1e",
   foreground: "#d4d4d4",
   cursor: "#d4d4d4",
@@ -25,7 +33,7 @@ export const DARK_THEME: ITheme = {
   brightWhite: "#ffffff",
 };
 
-export const LIGHT_THEME: ITheme = {
+const vscodeLight: ITheme = {
   background: "#ffffff",
   foreground: "#383a42",
   cursor: "#383a42",
@@ -49,3 +57,234 @@ export const LIGHT_THEME: ITheme = {
   brightCyan: "#0184bc",
   brightWhite: "#ffffff",
 };
+
+const dracula: ITheme = {
+  background: "#282a36",
+  foreground: "#f8f8f2",
+  cursor: "#f8f8f2",
+  cursorAccent: "#282a36",
+  selectionBackground: "#44475a",
+  selectionForeground: "#f8f8f2",
+  black: "#21222c",
+  red: "#ff5555",
+  green: "#50fa7b",
+  yellow: "#f1fa8c",
+  blue: "#bd93f9",
+  magenta: "#ff79c6",
+  cyan: "#8be9fd",
+  white: "#f8f8f2",
+  brightBlack: "#6272a4",
+  brightRed: "#ff6e6e",
+  brightGreen: "#69ff94",
+  brightYellow: "#ffffa5",
+  brightBlue: "#d6acff",
+  brightMagenta: "#ff92df",
+  brightCyan: "#a4ffff",
+  brightWhite: "#ffffff",
+};
+
+const nord: ITheme = {
+  background: "#2e3440",
+  foreground: "#eceff4",
+  cursor: "#eceff4",
+  cursorAccent: "#2e3440",
+  selectionBackground: "#434c5e",
+  selectionForeground: "#eceff4",
+  black: "#3b4252",
+  red: "#bf616a",
+  green: "#a3be8c",
+  yellow: "#ebcb8b",
+  blue: "#81a1c1",
+  magenta: "#b48ead",
+  cyan: "#88c0d0",
+  white: "#e5e9f0",
+  brightBlack: "#4c566a",
+  brightRed: "#bf616a",
+  brightGreen: "#a3be8c",
+  brightYellow: "#ebcb8b",
+  brightBlue: "#81a1c1",
+  brightMagenta: "#b48ead",
+  brightCyan: "#8fbcbb",
+  brightWhite: "#eceff4",
+};
+
+const catppuccinMocha: ITheme = {
+  background: "#1e1e2e",
+  foreground: "#cdd6f4",
+  cursor: "#f5e0dc",
+  cursorAccent: "#1e1e2e",
+  selectionBackground: "#585b70",
+  selectionForeground: "#cdd6f4",
+  black: "#45475a",
+  red: "#f38ba8",
+  green: "#a6e3a1",
+  yellow: "#f9e2af",
+  blue: "#89b4fa",
+  magenta: "#f5c2e7",
+  cyan: "#94e2d5",
+  white: "#bac2de",
+  brightBlack: "#585b70",
+  brightRed: "#f38ba8",
+  brightGreen: "#a6e3a1",
+  brightYellow: "#f9e2af",
+  brightBlue: "#89b4fa",
+  brightMagenta: "#f5c2e7",
+  brightCyan: "#94e2d5",
+  brightWhite: "#a6adc8",
+};
+
+const solarizedDark: ITheme = {
+  background: "#002b36",
+  foreground: "#839496",
+  cursor: "#839496",
+  cursorAccent: "#002b36",
+  selectionBackground: "#073642",
+  selectionForeground: "#93a1a1",
+  black: "#073642",
+  red: "#dc322f",
+  green: "#859900",
+  yellow: "#b58900",
+  blue: "#268bd2",
+  magenta: "#d33682",
+  cyan: "#2aa198",
+  white: "#eee8d5",
+  brightBlack: "#586e75",
+  brightRed: "#cb4b16",
+  brightGreen: "#586e75",
+  brightYellow: "#657b83",
+  brightBlue: "#839496",
+  brightMagenta: "#6c71c4",
+  brightCyan: "#93a1a1",
+  brightWhite: "#fdf6e3",
+};
+
+const solarizedLight: ITheme = {
+  background: "#fdf6e3",
+  foreground: "#657b83",
+  cursor: "#657b83",
+  cursorAccent: "#fdf6e3",
+  selectionBackground: "#eee8d5",
+  selectionForeground: "#586e75",
+  black: "#073642",
+  red: "#dc322f",
+  green: "#859900",
+  yellow: "#b58900",
+  blue: "#268bd2",
+  magenta: "#d33682",
+  cyan: "#2aa198",
+  white: "#eee8d5",
+  brightBlack: "#586e75",
+  brightRed: "#cb4b16",
+  brightGreen: "#586e75",
+  brightYellow: "#657b83",
+  brightBlue: "#839496",
+  brightMagenta: "#6c71c4",
+  brightCyan: "#93a1a1",
+  brightWhite: "#fdf6e3",
+};
+
+const gruvboxDark: ITheme = {
+  background: "#282828",
+  foreground: "#ebdbb2",
+  cursor: "#ebdbb2",
+  cursorAccent: "#282828",
+  selectionBackground: "#504945",
+  selectionForeground: "#ebdbb2",
+  black: "#282828",
+  red: "#cc241d",
+  green: "#98971a",
+  yellow: "#d79921",
+  blue: "#458588",
+  magenta: "#b16286",
+  cyan: "#689d6a",
+  white: "#a89984",
+  brightBlack: "#928374",
+  brightRed: "#fb4934",
+  brightGreen: "#b8bb26",
+  brightYellow: "#fabd2f",
+  brightBlue: "#83a598",
+  brightMagenta: "#d3869b",
+  brightCyan: "#8ec07c",
+  brightWhite: "#ebdbb2",
+};
+
+const tokyoNight: ITheme = {
+  background: "#1a1b26",
+  foreground: "#c0caf5",
+  cursor: "#c0caf5",
+  cursorAccent: "#1a1b26",
+  selectionBackground: "#33467c",
+  selectionForeground: "#c0caf5",
+  black: "#15161e",
+  red: "#f7768e",
+  green: "#9ece6a",
+  yellow: "#e0af68",
+  blue: "#7aa2f7",
+  magenta: "#bb9af7",
+  cyan: "#7dcfff",
+  white: "#a9b1d6",
+  brightBlack: "#414868",
+  brightRed: "#f7768e",
+  brightGreen: "#9ece6a",
+  brightYellow: "#e0af68",
+  brightBlue: "#7aa2f7",
+  brightMagenta: "#bb9af7",
+  brightCyan: "#7dcfff",
+  brightWhite: "#c0caf5",
+};
+
+const monokai: ITheme = {
+  background: "#272822",
+  foreground: "#f8f8f2",
+  cursor: "#f8f8f2",
+  cursorAccent: "#272822",
+  selectionBackground: "#49483e",
+  selectionForeground: "#f8f8f2",
+  black: "#272822",
+  red: "#f92672",
+  green: "#a6e22e",
+  yellow: "#f4bf75",
+  blue: "#66d9ef",
+  magenta: "#ae81ff",
+  cyan: "#a1efe4",
+  white: "#f8f8f2",
+  brightBlack: "#75715e",
+  brightRed: "#f92672",
+  brightGreen: "#a6e22e",
+  brightYellow: "#f4bf75",
+  brightBlue: "#66d9ef",
+  brightMagenta: "#ae81ff",
+  brightCyan: "#a1efe4",
+  brightWhite: "#f9f8f5",
+};
+
+export const BUILTIN_THEMES: Record<string, TerminalTheme> = {
+  "vscode-dark": { name: "VS Code Dark", variant: "dark", theme: vscodeDark },
+  "vscode-light": { name: "VS Code Light", variant: "light", theme: vscodeLight },
+  dracula: { name: "Dracula", variant: "dark", theme: dracula },
+  nord: { name: "Nord", variant: "dark", theme: nord },
+  "catppuccin-mocha": { name: "Catppuccin Mocha", variant: "dark", theme: catppuccinMocha },
+  "solarized-dark": { name: "Solarized Dark", variant: "dark", theme: solarizedDark },
+  "solarized-light": { name: "Solarized Light", variant: "light", theme: solarizedLight },
+  "gruvbox-dark": { name: "Gruvbox Dark", variant: "dark", theme: gruvboxDark },
+  "tokyo-night": { name: "Tokyo Night", variant: "dark", theme: tokyoNight },
+  monokai: { name: "Monokai", variant: "dark", theme: monokai },
+};
+
+// Keep old exports for backwards compat during transition
+export const DARK_THEME = vscodeDark;
+export const LIGHT_THEME = vscodeLight;
+
+/** Resolve theme by ID, checking custom themes then builtins, falling back to VS Code dark/light */
+export function resolveTheme(
+  themeId: string | undefined,
+  resolvedAppTheme: "dark" | "light",
+  customThemes?: import("../shared/types.js").CustomTerminalTheme[],
+): ITheme {
+  if (themeId) {
+    if (BUILTIN_THEMES[themeId]) return BUILTIN_THEMES[themeId].theme;
+    const custom = customThemes?.find((t) => t.id === themeId);
+    if (custom) return custom.colors;
+  }
+  return resolvedAppTheme === "dark" ? vscodeDark : vscodeLight;
+}

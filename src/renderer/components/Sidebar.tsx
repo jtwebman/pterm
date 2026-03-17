@@ -1,8 +1,10 @@
-import { useRef, useEffect } from "react";
-import type { Project } from "../../shared/types.js";
+import { useRef, useEffect, useState } from "react";
+import type { Project, CustomTerminalTheme } from "../../shared/types.js";
 import { bridge } from "../bridge.js";
 import { useApp } from "../store.js";
 import { ProjectItem } from "./ProjectItem.js";
+import { BUILTIN_THEMES } from "../themes.js";
+import { ThemeEditor } from "./ThemeEditor.js";
 
 const MIN_FONT_SIZE = 6;
 const MAX_FONT_SIZE = 32;
@@ -15,6 +17,8 @@ interface Props {
 export function Sidebar({ onAddProject, onEditProject }: Props) {
   const { state, dispatch } = useApp();
   const ref = useRef<HTMLDivElement>(null);
+  const [themeEditorOpen, setThemeEditorOpen] = useState(false);
+  const [editingTheme, setEditingTheme] = useState<CustomTerminalTheme | undefined>();
 
   useEffect(() => {
     const el = ref.current;
@@ -40,6 +44,14 @@ export function Sidebar({ onAddProject, onEditProject }: Props) {
     bridge.settings.update({ theme: next });
   }
 
+  function handleEditCustomTheme(themeId: string) {
+    const custom = state.customThemes.find((t) => t.id === themeId);
+    if (custom) {
+      setEditingTheme(custom);
+      setThemeEditorOpen(true);
+    }
+  }
+
   const themeLabel = state.theme === "system" ? "Auto" : state.theme === "dark" ? "Dark" : "Light";
 
   return (
@@ -63,15 +75,68 @@ export function Sidebar({ onAddProject, onEditProject }: Props) {
           <ProjectItem key={p.id} project={p} onEdit={onEditProject} />
         ))}
       </div>
-      <div className="px-3 py-2 border-t border-gray-200 dark:border-gray-800">
+      <div className="px-3 py-2 border-t border-gray-200 dark:border-gray-800 space-y-1">
         <button
           onClick={handleThemeCycle}
           className="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-900 dark:hover:text-gray-200"
-          title="Toggle theme"
+          title="Toggle UI theme"
         >
-          Theme: {themeLabel}
+          UI: {themeLabel}
         </button>
+        <div className="flex items-center gap-1">
+          <select
+            value={state.terminalTheme}
+            onChange={(e) => {
+              const val = e.target.value;
+              if (val === "__edit__") {
+                // Find the custom theme being "edited" — open editor for it
+                return;
+              }
+              dispatch({ type: "SET_TERMINAL_THEME", terminalTheme: val });
+              bridge.settings.update({ terminalTheme: val });
+            }}
+            className="text-xs bg-transparent text-gray-400 dark:text-gray-500 hover:text-gray-900 dark:hover:text-gray-200 cursor-pointer border-none outline-none flex-1 min-w-0"
+            title="Default terminal theme"
+          >
+            <option value="">Terminal: Auto</option>
+            <optgroup label="Built-in">
+              {Object.entries(BUILTIN_THEMES).map(([id, t]) => (
+                <option key={id} value={id}>{t.name}</option>
+              ))}
+            </optgroup>
+            {state.customThemes.length > 0 && (
+              <optgroup label="Custom">
+                {state.customThemes.map((t) => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
+              </optgroup>
+            )}
+          </select>
+          {/* Edit button for custom themes */}
+          {state.customThemes.some((t) => t.id === state.terminalTheme) && (
+            <button
+              onClick={() => handleEditCustomTheme(state.terminalTheme)}
+              className="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-900 dark:hover:text-gray-200 shrink-0"
+              title="Edit theme"
+            >
+              &#x270E;
+            </button>
+          )}
+          <button
+            onClick={() => { setEditingTheme(undefined); setThemeEditorOpen(true); }}
+            className="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-900 dark:hover:text-gray-200 shrink-0"
+            title="Create custom theme"
+          >
+            +
+          </button>
+        </div>
       </div>
+      {themeEditorOpen && (
+        <ThemeEditor
+          editingTheme={editingTheme}
+          onClose={() => { setThemeEditorOpen(false); setEditingTheme(undefined); }}
+        />
+      )}
     </div>
   );
 }

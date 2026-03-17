@@ -1,8 +1,9 @@
 import { useState } from "react";
 import type { Project } from "../../shared/types.js";
 import { useApp } from "../store.js";
-import { TerminalTab } from "./TerminalTab.js";
+import { BranchGroup } from "./BranchGroup.js";
 import { CommandPicker } from "./CommandPicker.js";
+import { BranchManager } from "./BranchManager.js";
 
 interface Props {
   project: Project;
@@ -11,16 +12,17 @@ interface Props {
 
 export function ProjectItem({ project, onEdit }: Props) {
   const [collapsed, setCollapsed] = useState(false);
-  const { state, dispatch } = useApp();
+  const [showBranchManager, setShowBranchManager] = useState(false);
+  const { state } = useApp();
   const terminals = state.terminals.filter((t) => t.projectId === project.id);
 
-  function handleDropEnd(e: React.DragEvent) {
-    e.preventDefault();
-    const draggedKey = e.dataTransfer.getData("text/plain");
-    if (draggedKey) {
-      dispatch({ type: "REORDER_TERMINAL", draggedKey, beforeKey: null });
-    }
-  }
+  const mainTerminals = terminals.filter((t) => !t.branchId);
+  const branchGroups = project.branches.map((b) => ({
+    id: b.id,
+    name: b.name,
+    folder: b.folder,
+    terminals: terminals.filter((t) => t.branchId === b.id),
+  }));
 
   return (
     <div className="mb-1">
@@ -39,24 +41,43 @@ export function ProjectItem({ project, onEdit }: Props) {
         >
           &#x2699;
         </button>
+        {project.branches.length > 0 && (
+          <button
+            onClick={() => setShowBranchManager(true)}
+            className="opacity-0 group-hover:opacity-100 text-gray-400 dark:text-gray-500 hover:text-gray-900 dark:hover:text-gray-200"
+            title="Manage branches"
+          >
+            &#x2442;
+          </button>
+        )}
         <CommandPicker project={project} />
       </div>
-      {!collapsed && terminals.length > 0 && (
-        <div className="ml-4">
-          {terminals.map((t) => (
-            <TerminalTab
-              key={t.key}
-              terminal={t}
-              isActive={t.key === state.activeTerminalKey}
+      {!collapsed && (
+        <>
+          <BranchGroup
+            project={project}
+            branchId={null}
+            name={project.name}
+            folder={project.folder}
+            terminals={mainTerminals}
+          />
+          {branchGroups.map((bg) => (
+            <BranchGroup
+              key={bg.id}
+              project={project}
+              branchId={bg.id}
+              name={bg.name}
+              folder={bg.folder}
+              terminals={bg.terminals}
             />
           ))}
-          {/* Drop zone at end of list */}
-          <div
-            onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; }}
-            onDrop={handleDropEnd}
-            className="h-2"
-          />
-        </div>
+        </>
+      )}
+      {showBranchManager && (
+        <BranchManager
+          project={project}
+          onClose={() => setShowBranchManager(false)}
+        />
       )}
     </div>
   );

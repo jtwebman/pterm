@@ -86,7 +86,7 @@ export class SessionStore {
   }
 
   private createTables(): void {
-    this.db.exec(`
+    this.db!.exec(`
       CREATE TABLE IF NOT EXISTS sessions (
         terminal_id   TEXT PRIMARY KEY,
         project_id    TEXT NOT NULL,

@@ -7,7 +7,7 @@ import "@xterm/xterm/css/xterm.css";
 import { bridge } from "../bridge.js";
 import { useApp } from "../store.js";
 import { SearchBar } from "./SearchBar.js";
-import { DARK_THEME, LIGHT_THEME } from "../themes.js";
+import { resolveTheme } from "../themes.js";
 import type { TerminalSession } from "../../shared/types.js";
 
 const MIN_FONT_SIZE = 6;
@@ -32,7 +32,10 @@ export function TerminalPane({ terminal, isVisible }: Props) {
   searchVisibleRef.current = searchVisible;
   const searchQueryRef = useRef("");
 
-  const xtermTheme = state.resolvedTheme === "dark" ? DARK_THEME : LIGHT_THEME;
+  // Resolve terminal theme: project override > default setting > fallback to app theme
+  const project = state.projects.find((p) => p.id === terminal.projectId);
+  const effectiveThemeId = project?.terminalTheme || state.terminalTheme || undefined;
+  const xtermTheme = resolveTheme(effectiveThemeId, state.resolvedTheme, state.customThemes);
 
   // Sync font size changes into a live terminal
   useEffect(() => {
@@ -55,7 +58,7 @@ export function TerminalPane({ terminal, isVisible }: Props) {
     const xterm = xtermRef.current;
     if (!xterm) return;
     xterm.options.theme = xtermTheme;
-  }, [state.resolvedTheme]);
+  }, [xtermTheme]);
 
   // Re-fit and focus when becoming visible (tab switch)
   useEffect(() => {
@@ -106,6 +109,7 @@ export function TerminalPane({ terminal, isVisible }: Props) {
     xterm.loadAddon(searchAddon);
 
     xterm.open(el);
+
 
     // Copy/paste + shortcut keybindings
     const isMac = bridge.platform === "darwin";
@@ -290,7 +294,9 @@ export function TerminalPane({ terminal, isVisible }: Props) {
       className="relative w-full h-full"
       style={{
         backgroundColor: xtermTheme.background,
-        display: isVisible ? "block" : "none",
+        padding: "4px 0 4px 4px",
+        display: isVisible ? "flex" : "none",
+        flexDirection: "column" as const,
       }}
     >
       {searchVisible && (
@@ -320,7 +326,7 @@ export function TerminalPane({ terminal, isVisible }: Props) {
           </div>
         </div>
       )}
-      <div ref={containerRef} className="w-full h-full" />
+      <div ref={containerRef} className="flex-1 min-h-0" />
     </div>
   );
 }

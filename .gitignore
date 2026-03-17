@@ -7,3 +7,4 @@ dist/
 test-results/
 .DS_Store
 Thumbs.db
+release/

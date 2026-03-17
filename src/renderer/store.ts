@@ -7,7 +7,7 @@ import {
   type ReactNode,
 } from "react";
 import { createElement } from "react";
-import type { Project, TerminalSession, Activity } from "../shared/types.js";
+import type { Project, TerminalSession, Activity, CustomTerminalTheme } from "../shared/types.js";
 import { makeTerminalKey } from "../shared/types.js";
 import { bridge } from "./bridge.js";
 
@@ -20,7 +20,10 @@ export interface AppState {
   fontSize: number;
   sidebarWidth: number;
   theme: "system" | "dark" | "light";
+  terminalTheme: string;
   resolvedTheme: "dark" | "light";
+  customThemes: CustomTerminalTheme[];
+  branchNames: Record<string, string>;
 }
 
 const initialState: AppState = {
@@ -30,7 +33,10 @@ const initialState: AppState = {
   fontSize: 12,
   sidebarWidth: 250,
   theme: "system",
+  terminalTheme: "",
   resolvedTheme: "dark",
+  customThemes: [],
+  branchNames: {},
 };
 
 // Actions
@@ -49,8 +55,11 @@ export type AppAction =
   | { type: "SET_FONT_SIZE"; fontSize: number }
   | { type: "SET_SIDEBAR_WIDTH"; sidebarWidth: number }
   | { type: "SET_THEME"; theme: "system" | "dark" | "light" }
+  | { type: "SET_TERMINAL_THEME"; terminalTheme: string }
+  | { type: "SET_CUSTOM_THEMES"; customThemes: CustomTerminalTheme[] }
   | { type: "SET_RESOLVED_THEME"; resolvedTheme: "dark" | "light" }
-  | { type: "REORDER_TERMINAL"; draggedKey: string; beforeKey: string | null };
+  | { type: "REORDER_TERMINAL"; draggedKey: string; beforeKey: string | null }
+  | { type: "SET_BRANCH_NAME"; folder: string; branchName: string };
 
 function reducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
@@ -116,6 +125,10 @@ function reducer(state: AppState, action: AppAction): AppState {
       return { ...state, sidebarWidth: action.sidebarWidth };
     case "SET_THEME":
       return { ...state, theme: action.theme };
+    case "SET_TERMINAL_THEME":
+      return { ...state, terminalTheme: action.terminalTheme };
+    case "SET_CUSTOM_THEMES":
+      return { ...state, customThemes: action.customThemes };
     case "SET_RESOLVED_THEME":
       return { ...state, resolvedTheme: action.resolvedTheme };
     case "REORDER_TERMINAL": {
@@ -142,6 +155,11 @@ function reducer(state: AppState, action: AppAction): AppState {
       result.splice(beforeIdx, 0, dragged);
       return { ...state, terminals: result };
     }
+    case "SET_BRANCH_NAME":
+      return {
+        ...state,
+        branchNames: { ...state.branchNames, [action.folder]: action.branchName },
+      };
     default:
       return state;
   }
@@ -181,6 +199,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
               aiSessionId: s.aiSessionId,
             }));
           if (terminals.length) {
+            // Restore saved order
+            const savedOrder = await bridge.terminal.getOrder();
+            if (savedOrder) {
+              const orderMap = new Map(savedOrder.map((key, i) => [key, i]));
+              terminals.sort((a, b) => {
+                const ai = orderMap.get(a.key) ?? Infinity;
+                const bi = orderMap.get(b.key) ?? Infinity;
+                return ai - bi;
+              });
+            }
             dispatch({ type: "SET_TERMINALS", terminals });
             const savedKey = await bridge.terminal.getActiveKey();
             const validKey = terminals.find((t) => t.key === savedKey)?.key ?? terminals[0].key;
@@ -192,6 +220,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         dispatch({ type: "SET_FONT_SIZE", fontSize: settings.fontSize });
         dispatch({ type: "SET_SIDEBAR_WIDTH", sidebarWidth: settings.sidebarWidth });
         dispatch({ type: "SET_THEME", theme: settings.theme });
+        if (settings.terminalTheme) {
+          dispatch({ type: "SET_TERMINAL_THEME", terminalTheme: settings.terminalTheme });
+        }
+        if (settings.customThemes?.length) {
+          dispatch({ type: "SET_CUSTOM_THEMES", customThemes: settings.customThemes });
+        }
 
         const isDark = await bridge.theme.getNative();
         dispatch({ type: "SET_RESOLVED_THEME", resolvedTheme: isDark ? "dark" : "light" });
@@ -213,6 +247,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       bridge.terminal.setActiveKey(state.activeTerminalKey);
     }
   }, [state.activeTerminalKey]);
+
+  // Persist terminal order so it survives restart
+  useEffect(() => {
+    if (state.terminals.length > 0) {
+      bridge.terminal.setOrder(state.terminals.map((t) => t.key));
+    }
+  }, [state.terminals]);
 
   useEffect(() => {
     if (state.theme === "dark") {

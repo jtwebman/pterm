@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import type { Project, Command } from "../../shared/types.js";
 import { bridge } from "../bridge.js";
 import { useApp } from "../store.js";
+import { BUILTIN_THEMES } from "../themes.js";
 
 interface Props {
   project?: Project; // undefined = create mode
@@ -23,6 +24,7 @@ export function ProjectConfigDialog({ project, onClose }: Props) {
   const [worktreeCopyFiles, setWorktreeCopyFiles] = useState<string[]>(
     project?.worktreeCopyFiles ?? [".env", ".env.local"]
   );
+  const [terminalTheme, setTerminalTheme] = useState(project?.terminalTheme ?? "");
   const [wslDistros, setWslDistros] = useState<string[]>([]);
 
   // Detect available commands when creating a new project
@@ -67,6 +69,7 @@ export function ProjectConfigDialog({ project, onClose }: Props) {
         envVars: envObj,
         commands,
         worktreeCopyFiles: filteredCopyFiles,
+        terminalTheme: terminalTheme || undefined,
       });
       dispatch({ type: "UPDATE_PROJECT", project: updated });
     } else {
@@ -76,6 +79,7 @@ export function ProjectConfigDialog({ project, onClose }: Props) {
         envVars: envObj,
         commands,
         worktreeCopyFiles: filteredCopyFiles,
+        terminalTheme: terminalTheme || undefined,
       });
       dispatch({ type: "ADD_PROJECT", project: created });
     }
@@ -161,6 +165,30 @@ export function ProjectConfigDialog({ project, onClose }: Props) {
                 Browse
               </button>
             </div>
+          </div>
+
+          {/* Terminal Theme */}
+          <div>
+            <label className="block text-sm text-gray-500 dark:text-gray-400 mb-1">Terminal Theme</label>
+            <select
+              value={terminalTheme}
+              onChange={(e) => setTerminalTheme(e.target.value)}
+              className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-blue-500"
+            >
+              <option value="">Default</option>
+              <optgroup label="Built-in">
+                {Object.entries(BUILTIN_THEMES).map(([id, t]) => (
+                  <option key={id} value={id}>{t.name}</option>
+                ))}
+              </optgroup>
+              {state.customThemes.length > 0 && (
+                <optgroup label="Custom">
+                  {state.customThemes.map((t) => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </optgroup>
+              )}
+            </select>
           </div>
 
           {/* Env Vars */}

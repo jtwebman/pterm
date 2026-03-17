@@ -25,6 +25,8 @@ contextBridge.exposeInMainWorld("ptermBridge", {
     getSavedSessions: () => ipcRenderer.invoke("terminal:get-saved-sessions"),
     setActiveKey: (key: string) => ipcRenderer.invoke("terminal:set-active-key", key),
     getActiveKey: () => ipcRenderer.invoke("terminal:get-active-key"),
+    setOrder: (keys: string[]) => ipcRenderer.invoke("terminal:set-order", keys),
+    getOrder: () => ipcRenderer.invoke("terminal:get-order") as Promise<string[] | null>,
     onData: (terminalId: string, cb: (data: string) => void) => {
       ipcRenderer.on(`terminal:data:${terminalId}`, (_event: any, data) => cb(data));
     },
@@ -65,6 +67,17 @@ contextBridge.exposeInMainWorld("ptermBridge", {
     openExternal: (url: string) => ipcRenderer.invoke("shell:open-external", url),
     detectWsl: () => ipcRenderer.invoke("shell:detect-wsl"),
     detectCommands: () => ipcRenderer.invoke("shell:detect-commands"),
+  },
+  git: {
+    getBranch: (folder: string) => ipcRenderer.invoke("git:get-branch", folder),
+    checkout: (folder: string, branch: string) => ipcRenderer.invoke("git:checkout", folder, branch),
+    watchBranch: (folder: string) => ipcRenderer.invoke("git:watch-branch", folder),
+    unwatchBranch: (folder: string) => ipcRenderer.invoke("git:unwatch-branch", folder),
+    onBranchChanged: (cb: (folder: string, branch: string) => void) => {
+      const handler = (_event: any, folder: string, branch: string) => cb(folder, branch);
+      ipcRenderer.on("git:branch-changed", handler);
+      return () => { ipcRenderer.removeListener("git:branch-changed", handler); };
+    },
   },
   theme: {
     getNative: () => ipcRenderer.invoke("theme:get-native"),

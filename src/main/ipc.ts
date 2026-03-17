@@ -19,6 +19,13 @@ import { createBranch, deleteBranch } from "./branch-manager.js";
 import { detectWslDistros } from "./shell-resolver.js";
 import { detectCommands } from "./command-detector.js";
 import type { BrowserWindow } from "electron";
+import { execFile as execFileCb } from "node:child_process";
+import { promisify } from "node:util";
+import { watch, type FSWatcher } from "node:fs";
+import { join } from "node:path";
+
+const execFile = promisify(execFileCb);
+const gitWatchers = new Map<string, FSWatcher>();
 
 export function registerIpcHandlers(
   terminalManager: TerminalManager,
@@ -68,6 +75,16 @@ export function registerIpcHandlers(
     return sessionStore.getMeta("activeTerminalKey");
   });
 
+  ipcMain.handle("terminal:set-order", (_event, keys: string[]) => {
+    sessionStore.setMeta("terminalOrder", JSON.stringify(keys));
+  });
+
+  ipcMain.handle("terminal:get-order", () => {
+    const raw = sessionStore.getMeta("terminalOrder");
+    if (!raw) return null;
+    try { return JSON.parse(raw); } catch { return null; }
+  });
+
   ipcMain.handle("terminal:restart", (event, input: TerminalRestartInput) => {
     const info = terminalManager.getTerminalInfo(input.terminalId);
     if (!info) return;
@@ -114,6 +131,46 @@ export function registerIpcHandlers(
 
     await deleteBranch(project, branch);
     configStore.removeBranch(input.projectId, input.branchId);
+  });
+
+  // Git
+  ipcMain.handle("git:get-branch", async (_event, folder: string) => {
+    try {
+      const { stdout } = await execFile("git", ["rev-parse", "--abbrev-ref", "HEAD"], { cwd: folder });
+      return stdout.trim() || null;
+    } catch {
+      return null;
+    }
+  });
+
+  ipcMain.handle("git:checkout", async (_event, folder: string, branch: string) => {
+    await execFile("git", ["checkout", branch], { cwd: folder });
+  });
+
+  ipcMain.handle("git:watch-branch", (_event, folder: string) => {
+    if (gitWatchers.has(folder)) return;
+    const headPath = join(folder, ".git", "HEAD");
+    try {
+      const watcher = watch(headPath, { persistent: false }, async () => {
+        try {
+          const { stdout } = await execFile("git", ["rev-parse", "--abbrev-ref", "HEAD"], { cwd: folder });
+          const branch = stdout.trim();
+          if (branch) {
+            const win = getMainWindow();
+            if (win) win.webContents.send("git:branch-changed", folder, branch);
+          }
+        } catch { /* not a git repo anymore or detached HEAD */ }
+      });
+      gitWatchers.set(folder, watcher);
+    } catch { /* .git/HEAD doesn't exist */ }
+  });
+
+  ipcMain.handle("git:unwatch-branch", (_event, folder: string) => {
+    const watcher = gitWatchers.get(folder);
+    if (watcher) {
+      watcher.close();
+      gitWatchers.delete(folder);
+    }
   });
 
   // Settings

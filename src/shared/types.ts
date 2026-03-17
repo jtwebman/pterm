@@ -32,16 +32,50 @@ export interface Project {
   branches: ProjectBranch[];
   /** Glob patterns of files to copy into new worktrees (e.g. ".env", ".env.local") */
   worktreeCopyFiles: string[];
+  /** Terminal color theme ID override for this project */
+  terminalTheme?: string;
+}
+
+export interface CustomTerminalTheme {
+  id: string;
+  name: string;
+  variant: "dark" | "light";
+  colors: {
+    background: string;
+    foreground: string;
+    cursor: string;
+    cursorAccent: string;
+    selectionBackground: string;
+    selectionForeground: string;
+    black: string;
+    red: string;
+    green: string;
+    yellow: string;
+    blue: string;
+    magenta: string;
+    cyan: string;
+    white: string;
+    brightBlack: string;
+    brightRed: string;
+    brightGreen: string;
+    brightYellow: string;
+    brightBlue: string;
+    brightMagenta: string;
+    brightCyan: string;
+    brightWhite: string;
+  };
 }
 
 export interface Config {
   projects: Project[];
   settings: {
     theme: "system" | "dark" | "light";
+    terminalTheme?: string;
     sidebarWidth: number;
     defaultShell?: ShellType;
     fontSize: number;
     defaultProjectCommands: Command[];
+    customThemes?: CustomTerminalTheme[];
   };
 }
 
@@ -118,6 +152,7 @@ export interface ProjectCreateInput {
   envVars: Record<string, string>;
   commands: Command[];
   worktreeCopyFiles: string[];
+  terminalTheme?: string;
 }
 
 export interface ProjectUpdateInput {
@@ -127,6 +162,7 @@ export interface ProjectUpdateInput {
   envVars?: Record<string, string>;
   commands?: Command[];
   worktreeCopyFiles?: string[];
+  terminalTheme?: string;
 }
 
 export interface BranchCreateInput {
@@ -151,6 +187,8 @@ export interface SettingsUpdateInput {
   fontSize?: number;
   sidebarWidth?: number;
   theme?: "system" | "dark" | "light";
+  terminalTheme?: string;
+  customThemes?: CustomTerminalTheme[];
 }
 
 export interface ActivityUpdate {
@@ -169,6 +207,8 @@ export interface PtermBridge {
     getSavedSessions: () => Promise<SavedSession[]>;
     setActiveKey: (key: string) => Promise<void>;
     getActiveKey: () => Promise<string | null>;
+    setOrder: (keys: string[]) => Promise<void>;
+    getOrder: () => Promise<string[] | null>;
     onData: (terminalId: string, cb: (data: string) => void) => void;
     offData: (terminalId: string) => void;
     onExit: (terminalId: string, cb: (data: { exitCode: number; signal?: number }) => void) => void;
@@ -197,6 +237,13 @@ export interface PtermBridge {
     openExternal: (url: string) => Promise<void>;
     detectWsl: () => Promise<string[]>;
     detectCommands: () => Promise<DetectedCommand[]>;
+  };
+  git: {
+    getBranch: (folder: string) => Promise<string | null>;
+    checkout: (folder: string, branch: string) => Promise<void>;
+    watchBranch: (folder: string) => Promise<void>;
+    unwatchBranch: (folder: string) => Promise<void>;
+    onBranchChanged: (cb: (folder: string, branch: string) => void) => () => void;
   };
   theme: {
     getNative: () => Promise<boolean>;
