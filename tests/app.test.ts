@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import { execFileSync } from "node:child_process";
 import { test, expect } from "@playwright/test";
 import { launchApp, closeApp } from "./helpers.js";
 import type { ElectronApplication, Page } from "@playwright/test";
@@ -95,4 +96,76 @@ test("close tab removes terminal", async () => {
 
   // Terminal should be gone
   await expect(page.locator(".xterm-screen")).not.toBeVisible({ timeout: 3_000 });
+});
+
+test("create branch, verify sidebar, delete via branch manager", async () => {
+  // Set up a git repo as the project folder
+  const projectDir = path.join(tmpDir, "branch-test");
+  fs.mkdirSync(projectDir, { recursive: true });
+  execFileSync("git", ["init"], { cwd: projectDir });
+  execFileSync("git", ["config", "user.email", "test@test.com"], { cwd: projectDir });
+  execFileSync("git", ["config", "user.name", "Test"], { cwd: projectDir });
+  fs.writeFileSync(path.join(projectDir, "README.md"), "test");
+  execFileSync("git", ["add", "."], { cwd: projectDir });
+  execFileSync("git", ["commit", "-m", "init"], { cwd: projectDir });
+
+  await createProject(page, "Branch Test", projectDir);
+
+  // Open CommandPicker (the + button on the project)
+  const projectHeader = page.locator(".group", { hasText: "Branch Test" }).first();
+  await projectHeader.hover();
+  await page.waitForTimeout(200);
+  await projectHeader.getByTitle("New terminal").click();
+
+  // Select the "Shell" command explicitly (auto-detect may default to claude/codex)
+  const shellBtn = page.locator("button", { hasText: "Shell" }).first();
+  await shellBtn.click();
+
+  // Select "New branch" radio and enter branch name
+  await page.getByText("New branch").click();
+  await page.getByPlaceholder("Branch name").fill("test-feature");
+  await page.getByRole("button", { name: "Launch" }).click();
+
+  // Wait for terminal to appear
+  await expect(page.locator(".xterm-screen")).toBeVisible({ timeout: 5_000 });
+
+  // Verify branch group appears in sidebar
+  await expect(page.getByText("test-feature").first()).toBeVisible({ timeout: 3_000 });
+
+  // Verify worktree directory was created
+  const worktreeDir = path.join(tmpDir, ".pterm", "worktrees");
+  expect(fs.existsSync(worktreeDir)).toBe(true);
+  const worktreeContents = fs.readdirSync(worktreeDir, { recursive: true });
+  expect(worktreeContents.length).toBeGreaterThan(0);
+
+  // Close the terminal first so the branch can be deleted cleanly
+  const tab = page.locator(".group", { hasText: "Shell" }).first();
+  await tab.hover();
+  await page.waitForTimeout(200);
+  await tab.locator("button").last().click();
+  await expect(page.locator(".xterm-screen")).not.toBeVisible({ timeout: 3_000 });
+
+  // Hover over project header to reveal branch manager button
+  await projectHeader.hover();
+  await page.waitForTimeout(200);
+  await projectHeader.getByTitle("Manage branches").click();
+
+  // Branch manager dialog should be open with our branch listed
+  await expect(page.getByText("Branches — Branch Test")).toBeVisible();
+
+  // Click the delete button (×) next to the branch
+  await page.getByTitle("Delete branch").click();
+
+  // Branch should disappear from the manager dialog
+  await expect(page.getByTitle("Delete branch")).not.toBeVisible({ timeout: 3_000 });
+
+  // Close branch manager
+  await page.getByRole("button", { name: "Close" }).click();
+
+  // Verify worktree directory was cleaned up
+  // The worktrees dir may still have the project UUID folder, but
+  // the actual branch worktree folder inside it should be gone
+  const remaining = fs.readdirSync(worktreeDir, { recursive: true }) as string[];
+  const branchDirs = remaining.filter((f) => f.includes("test-feature"));
+  expect(branchDirs.length).toBe(0);
 });
