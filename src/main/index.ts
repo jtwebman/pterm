@@ -27,9 +27,11 @@ registerIpcHandlers(terminalManager, configStore, sessionStore, () => mainWindow
 let mainWindow: BrowserWindow | null = null;
 
 function createWindow(): void {
+  const iconPath = path.join(__dirname, "../../build/icon.png");
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
+    icon: iconPath,
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,

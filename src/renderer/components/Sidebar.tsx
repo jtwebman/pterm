@@ -5,6 +5,7 @@ import { useApp } from "../store.js";
 import { ProjectItem } from "./ProjectItem.js";
 import { BUILTIN_THEMES } from "../themes.js";
 import { ThemeEditor } from "./ThemeEditor.js";
+import iconSvg from "../assets/icon.svg";
 
 const MIN_FONT_SIZE = 6;
 const MAX_FONT_SIZE = 32;
@@ -61,7 +62,10 @@ export function Sidebar({ onAddProject, onEditProject }: Props) {
       style={{ fontSize: state.fontSize }}
     >
       <div className="flex items-center justify-between px-3 py-3 border-b border-gray-200 dark:border-gray-800">
-        <span className="font-semibold text-gray-700 dark:text-gray-300">Projects</span>
+        <span className="font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+          <img src={iconSvg} alt="" className="w-5 h-5" />
+          pterm
+        </span>
         <button
           onClick={onAddProject}
           className="text-gray-400 dark:text-gray-500 hover:text-gray-900 dark:hover:text-gray-200"
