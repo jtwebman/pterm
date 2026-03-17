@@ -195,27 +195,37 @@ export function registerIpcHandlers(
     if (!/^https?:\/\//.test(url)) return;
 
     if (browserCommand) {
-      // Parse command: handle quoted paths like "/mnt/c/Program Files/chrome.exe" --flag
+      // Parse command string into executable + args
+      // Handles: "/path with spaces/exe" --flag="value with spaces"
       const args: string[] = [];
-      let remaining = browserCommand.trim();
-      while (remaining.length > 0) {
-        if (remaining[0] === '"') {
-          const end = remaining.indexOf('"', 1);
-          if (end === -1) {
-            args.push(remaining.slice(1));
-            break;
-          }
-          args.push(remaining.slice(1, end));
-          remaining = remaining.slice(end + 1).trimStart();
+      let i = 0;
+      const src = browserCommand.trim();
+      while (i < src.length) {
+        if (src[i] === '"') {
+          // Standalone quoted token: "..."
+          const end = src.indexOf('"', i + 1);
+          if (end === -1) { args.push(src.slice(i + 1)); break; }
+          args.push(src.slice(i + 1, end));
+          i = end + 1;
         } else {
-          const space = remaining.indexOf(" ");
-          if (space === -1) {
-            args.push(remaining);
-            break;
+          // Unquoted token — may contain embedded quotes like --flag="val"
+          let token = "";
+          while (i < src.length && src[i] !== " ") {
+            if (src[i] === '"') {
+              // Embedded quote: consume until closing quote
+              const end = src.indexOf('"', i + 1);
+              if (end === -1) { token += src.slice(i + 1); i = src.length; break; }
+              token += src.slice(i + 1, end);
+              i = end + 1;
+            } else {
+              token += src[i];
+              i++;
+            }
           }
-          args.push(remaining.slice(0, space));
-          remaining = remaining.slice(space + 1).trimStart();
+          if (token) args.push(token);
         }
+        // Skip whitespace between tokens
+        while (i < src.length && src[i] === " ") i++;
       }
       const exe = args.shift()!;
       args.push(url);
