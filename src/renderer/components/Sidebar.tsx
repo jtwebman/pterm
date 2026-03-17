@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState } from "react";
-import type { Project, CustomTerminalTheme } from "../../shared/types.js";
+import type { Project, CustomTerminalTheme, DetectedBrowser } from "../../shared/types.js";
 import { bridge } from "../bridge.js";
 import { useApp } from "../store.js";
 import { ProjectItem } from "./ProjectItem.js";
@@ -20,6 +20,11 @@ export function Sidebar({ onAddProject, onEditProject }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [themeEditorOpen, setThemeEditorOpen] = useState(false);
   const [editingTheme, setEditingTheme] = useState<CustomTerminalTheme | undefined>();
+  const [detectedBrowsers, setDetectedBrowsers] = useState<DetectedBrowser[]>([]);
+
+  useEffect(() => {
+    bridge.shell.detectBrowsers().then(setDetectedBrowsers);
+  }, []);
 
   useEffect(() => {
     const el = ref.current;
@@ -87,6 +92,39 @@ export function Sidebar({ onAddProject, onEditProject }: Props) {
         >
           UI: {themeLabel}
         </button>
+        <div>
+          <select
+            value={state.browserCommand}
+            onChange={(e) => {
+              const val = e.target.value;
+              dispatch({ type: "SET_BROWSER_COMMAND", browserCommand: val });
+              bridge.settings.update({ browserCommand: val });
+            }}
+            className="text-xs bg-transparent text-gray-400 dark:text-gray-500 hover:text-gray-900 dark:hover:text-gray-200 cursor-pointer border-none outline-none w-full min-w-0"
+            title="Default browser for opening links"
+          >
+            <option value="">Browser: System default</option>
+            {detectedBrowsers.map((b) => {
+              const options = [];
+              options.push(
+                <option key={b.command} value={`"${b.command}"`}>
+                  {b.name}
+                </option>
+              );
+              if (b.profiles) {
+                for (const p of b.profiles) {
+                  const cmd = `"${b.command}" --profile-directory="${p.directory}"`;
+                  options.push(
+                    <option key={cmd} value={cmd}>
+                      {b.name} — {p.name}
+                    </option>
+                  );
+                }
+              }
+              return options;
+            })}
+          </select>
+        </div>
         <div className="flex items-center gap-1">
           <select
             value={state.terminalTheme}

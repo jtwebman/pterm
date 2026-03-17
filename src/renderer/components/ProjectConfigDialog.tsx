@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import type { Project, Command } from "../../shared/types.js";
+import type { Project, Command, DetectedBrowser, DirEntry } from "../../shared/types.js";
 import { bridge } from "../bridge.js";
 import { useApp } from "../store.js";
 import { BUILTIN_THEMES } from "../themes.js";
@@ -25,7 +25,14 @@ export function ProjectConfigDialog({ project, onClose }: Props) {
     project?.worktreeCopyFiles ?? [".env", ".env.local"]
   );
   const [terminalTheme, setTerminalTheme] = useState(project?.terminalTheme ?? "");
+  const [browserCommand, setBrowserCommand] = useState(project?.browserCommand ?? "");
   const [wslDistros, setWslDistros] = useState<string[]>([]);
+  const [detectedBrowsers, setDetectedBrowsers] = useState<DetectedBrowser[]>([]);
+  const [fileBrowserOpen, setFileBrowserOpen] = useState(false);
+
+  useEffect(() => {
+    bridge.shell.detectBrowsers().then(setDetectedBrowsers);
+  }, []);
 
   // Detect available commands when creating a new project
   useEffect(() => {
@@ -70,6 +77,7 @@ export function ProjectConfigDialog({ project, onClose }: Props) {
         commands,
         worktreeCopyFiles: filteredCopyFiles,
         terminalTheme: terminalTheme || undefined,
+        browserCommand: browserCommand || undefined,
       });
       dispatch({ type: "UPDATE_PROJECT", project: updated });
     } else {
@@ -80,6 +88,7 @@ export function ProjectConfigDialog({ project, onClose }: Props) {
         commands,
         worktreeCopyFiles: filteredCopyFiles,
         terminalTheme: terminalTheme || undefined,
+        browserCommand: browserCommand || undefined,
       });
       dispatch({ type: "ADD_PROJECT", project: created });
     }
@@ -123,6 +132,12 @@ export function ProjectConfigDialog({ project, onClose }: Props) {
 
   function removeCommand(index: number) {
     setCommands(commands.filter((_, i) => i !== index));
+  }
+
+  function handleTreeSelect(relativePath: string) {
+    if (!worktreeCopyFiles.includes(relativePath)) {
+      setWorktreeCopyFiles([...worktreeCopyFiles, relativePath]);
+    }
   }
 
   return (
@@ -188,6 +203,38 @@ export function ProjectConfigDialog({ project, onClose }: Props) {
                   ))}
                 </optgroup>
               )}
+            </select>
+          </div>
+
+          {/* Browser */}
+          <div>
+            <label className="block text-sm text-gray-500 dark:text-gray-400 mb-1">Browser</label>
+            <select
+              value={browserCommand}
+              onChange={(e) => setBrowserCommand(e.target.value)}
+              className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-blue-500"
+            >
+              <option value="">Default (use global setting)</option>
+              <option value="system">System default (xdg-open)</option>
+              {detectedBrowsers.map((b) => {
+                const options = [];
+                options.push(
+                  <option key={b.command} value={`"${b.command}"`}>
+                    {b.name}
+                  </option>
+                );
+                if (b.profiles) {
+                  for (const p of b.profiles) {
+                    const cmd = `"${b.command}" --profile-directory="${p.directory}"`;
+                    options.push(
+                      <option key={cmd} value={cmd}>
+                        {b.name} — {p.name}
+                      </option>
+                    );
+                  }
+                }
+                return options;
+              })}
             </select>
           </div>
 
@@ -263,12 +310,19 @@ export function ProjectConfigDialog({ project, onClose }: Props) {
           <div>
             <div className="flex items-center justify-between mb-1">
               <label className="text-sm text-gray-500 dark:text-gray-400">Worktree Copy Files</label>
-              <button onClick={() => setWorktreeCopyFiles([...worktreeCopyFiles, ""])} className="text-xs text-blue-400 hover:text-blue-300">
-                + Add
-              </button>
+              <div className="flex gap-2">
+                {folder.trim() && (
+                  <button onClick={() => setFileBrowserOpen(!fileBrowserOpen)} className="text-xs text-blue-400 hover:text-blue-300">
+                    Browse
+                  </button>
+                )}
+                <button onClick={() => setWorktreeCopyFiles([...worktreeCopyFiles, ""])} className="text-xs text-blue-400 hover:text-blue-300">
+                  + Add
+                </button>
+              </div>
             </div>
             <p className="text-xs text-gray-400 dark:text-gray-500 mb-2">
-              Glob patterns of files to copy into new worktrees (e.g. .env, .env.*)
+              Files, folders, or glob patterns to copy into new worktrees (e.g. .env, .env.*, config/)
             </p>
             {worktreeCopyFiles.map((pattern, i) => (
               <div key={i} className="flex gap-2 mb-2">
@@ -291,6 +345,27 @@ export function ProjectConfigDialog({ project, onClose }: Props) {
                 </button>
               </div>
             ))}
+            {fileBrowserOpen && folder.trim() && (
+              <div className="mt-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded overflow-hidden">
+                <div className="flex items-center justify-between px-2 py-1.5 bg-gray-50 dark:bg-gray-750 border-b border-gray-200 dark:border-gray-700">
+                  <span className="text-xs text-gray-500 dark:text-gray-400">Select files & folders</span>
+                  <button
+                    onClick={() => setFileBrowserOpen(false)}
+                    className="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-900 dark:hover:text-gray-200 shrink-0 ml-2"
+                  >
+                    &times;
+                  </button>
+                </div>
+                <div className="max-h-64 overflow-y-auto py-1">
+                  <FileTree
+                    rootFolder={folder}
+                    parentPath=""
+                    selectedPaths={worktreeCopyFiles}
+                    onSelect={handleTreeSelect}
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           {/* WSL Distros (Windows only) */}
@@ -342,5 +417,135 @@ export function ProjectConfigDialog({ project, onClose }: Props) {
         </div>
       </div>
     </div>
+  );
+}
+
+// Tree view components for file browser
+
+function FileTree({
+  rootFolder,
+  parentPath,
+  selectedPaths,
+  onSelect,
+}: {
+  rootFolder: string;
+  parentPath: string;
+  selectedPaths: string[];
+  onSelect: (path: string) => void;
+}) {
+  const [entries, setEntries] = useState<DirEntry[]>([]);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    const fullPath = parentPath ? `${rootFolder}/${parentPath}` : rootFolder;
+    bridge.shell.listDir(fullPath, rootFolder).then((result) => {
+      setEntries(result);
+      setLoaded(true);
+    });
+  }, [rootFolder, parentPath]);
+
+  if (!loaded) {
+    return <div className="px-2 py-1 text-xs text-gray-400 dark:text-gray-500">Loading...</div>;
+  }
+
+  if (entries.length === 0) {
+    return <div className="px-2 py-1 text-xs text-gray-400 dark:text-gray-500 italic">Empty</div>;
+  }
+
+  return (
+    <>
+      {entries.map((entry) => (
+        <FileTreeNode
+          key={entry.name}
+          entry={entry}
+          rootFolder={rootFolder}
+          parentPath={parentPath}
+          selectedPaths={selectedPaths}
+          onSelect={onSelect}
+        />
+      ))}
+    </>
+  );
+}
+
+function FileTreeNode({
+  entry,
+  rootFolder,
+  parentPath,
+  selectedPaths,
+  onSelect,
+}: {
+  entry: DirEntry;
+  rootFolder: string;
+  parentPath: string;
+  selectedPaths: string[];
+  onSelect: (path: string) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const relativePath = parentPath ? `${parentPath}/${entry.name}` : entry.name;
+  const alreadyAdded = selectedPaths.includes(relativePath);
+  const depth = parentPath ? parentPath.split("/").length : 0;
+  // Tracked files (not gitignored) are already in a worktree — grey them out
+  const tracked = entry.gitIgnored === false;
+
+  function handleClick() {
+    if (!alreadyAdded && !tracked) {
+      onSelect(relativePath);
+    }
+  }
+
+  function handleDoubleClick() {
+    if (entry.isDirectory) {
+      setExpanded(!expanded);
+    }
+  }
+
+  function handleToggle(e: React.MouseEvent) {
+    e.stopPropagation();
+    setExpanded(!expanded);
+  }
+
+  const dimmed = alreadyAdded || tracked;
+  const title = alreadyAdded
+    ? "Already added"
+    : tracked
+      ? "Already in worktree (tracked by git)"
+      : `Click to add ${relativePath}`;
+
+  return (
+    <>
+      <div
+        className={`flex items-center gap-1 py-0.5 text-xs hover:bg-gray-100 dark:hover:bg-gray-700 select-none ${dimmed ? "opacity-40" : "cursor-pointer"}`}
+        style={{ paddingLeft: `${depth * 16 + 8}px`, paddingRight: "8px" }}
+        onClick={handleClick}
+        onDoubleClick={handleDoubleClick}
+        title={title}
+      >
+        {entry.isDirectory ? (
+          <button
+            onClick={handleToggle}
+            className="shrink-0 w-4 text-center text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+          >
+            {expanded ? "\u25BE" : "\u25B8"}
+          </button>
+        ) : (
+          <span className="shrink-0 w-4" />
+        )}
+        <span className="shrink-0 text-gray-400 dark:text-gray-500">
+          {entry.isDirectory ? (expanded ? "\u{1F4C2}" : "\u{1F4C1}") : "\u{1F4C4}"}
+        </span>
+        <span className={`flex-1 truncate ${dimmed ? "text-gray-400 dark:text-gray-500" : "text-gray-700 dark:text-gray-300"}`}>
+          {entry.name}
+        </span>
+      </div>
+      {entry.isDirectory && expanded && (
+        <FileTree
+          rootFolder={rootFolder}
+          parentPath={relativePath}
+          selectedPaths={selectedPaths}
+          onSelect={onSelect}
+        />
+      )}
+    </>
   );
 }

@@ -64,9 +64,12 @@ contextBridge.exposeInMainWorld("ptermBridge", {
     pickFolder: () => ipcRenderer.invoke("dialog:pick-folder"),
   },
   shell: {
-    openExternal: (url: string) => ipcRenderer.invoke("shell:open-external", url),
+    openExternal: (url: string, browserCommand?: string) =>
+      ipcRenderer.invoke("shell:open-external", url, browserCommand),
     detectWsl: () => ipcRenderer.invoke("shell:detect-wsl"),
     detectCommands: () => ipcRenderer.invoke("shell:detect-commands"),
+    detectBrowsers: () => ipcRenderer.invoke("shell:detect-browsers"),
+    listDir: (folder: string, gitRoot?: string) => ipcRenderer.invoke("shell:list-dir", folder, gitRoot),
   },
   git: {
     getBranch: (folder: string) => ipcRenderer.invoke("git:get-branch", folder),

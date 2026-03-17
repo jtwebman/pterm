@@ -34,6 +34,20 @@ export interface Project {
   worktreeCopyFiles: string[];
   /** Terminal color theme ID override for this project */
   terminalTheme?: string;
+  /** Browser command override for this project */
+  browserCommand?: string;
+}
+
+export interface DetectedBrowser {
+  name: string;
+  command: string;
+  type: "chrome" | "edge" | "brave" | "firefox" | "other";
+  profiles?: BrowserProfile[];
+}
+
+export interface BrowserProfile {
+  directory: string;
+  name: string;
 }
 
 export interface CustomTerminalTheme {
@@ -71,6 +85,7 @@ export interface Config {
   settings: {
     theme: "system" | "dark" | "light";
     terminalTheme?: string;
+    browserCommand?: string;
     sidebarWidth: number;
     defaultShell?: ShellType;
     fontSize: number;
@@ -153,6 +168,7 @@ export interface ProjectCreateInput {
   commands: Command[];
   worktreeCopyFiles: string[];
   terminalTheme?: string;
+  browserCommand?: string;
 }
 
 export interface ProjectUpdateInput {
@@ -163,6 +179,7 @@ export interface ProjectUpdateInput {
   commands?: Command[];
   worktreeCopyFiles?: string[];
   terminalTheme?: string;
+  browserCommand?: string;
 }
 
 export interface BranchCreateInput {
@@ -188,12 +205,20 @@ export interface SettingsUpdateInput {
   sidebarWidth?: number;
   theme?: "system" | "dark" | "light";
   terminalTheme?: string;
+  browserCommand?: string;
   customThemes?: CustomTerminalTheme[];
 }
 
 export interface ActivityUpdate {
   activity: Activity;
   activityText: string;
+}
+
+export interface DirEntry {
+  name: string;
+  isDirectory: boolean;
+  /** true if the file/folder is gitignored (not tracked), i.e. won't be in a worktree */
+  gitIgnored?: boolean;
 }
 
 export interface PtermBridge {
@@ -234,9 +259,11 @@ export interface PtermBridge {
     pickFolder: () => Promise<string | null>;
   };
   shell: {
-    openExternal: (url: string) => Promise<void>;
+    openExternal: (url: string, browserCommand?: string) => Promise<void>;
     detectWsl: () => Promise<string[]>;
     detectCommands: () => Promise<DetectedCommand[]>;
+    detectBrowsers: () => Promise<DetectedBrowser[]>;
+    listDir: (folder: string, gitRoot?: string) => Promise<DirEntry[]>;
   };
   git: {
     getBranch: (folder: string) => Promise<string | null>;

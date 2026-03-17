@@ -18,11 +18,13 @@ import type { SessionStore } from "./session-store.js";
 import { createBranch, deleteBranch } from "./branch-manager.js";
 import { detectWslDistros } from "./shell-resolver.js";
 import { detectCommands } from "./command-detector.js";
+import { detectBrowsers } from "./browser-detector.js";
 import type { BrowserWindow } from "electron";
-import { execFile as execFileCb } from "node:child_process";
+import { execFile as execFileCb, spawn } from "node:child_process";
 import { promisify } from "node:util";
-import { watch, type FSWatcher } from "node:fs";
+import { watch, type FSWatcher, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
+import type { DirEntry } from "../shared/types.js";
 
 const execFile = promisify(execFileCb);
 const gitWatchers = new Map<string, FSWatcher>();
@@ -189,9 +191,105 @@ export function registerIpcHandlers(
     return result.filePaths[0];
   });
 
-  ipcMain.handle("shell:open-external", (_event, url: string) => {
+  ipcMain.handle("shell:open-external", (_event, url: string, browserCommand?: string) => {
     if (!/^https?:\/\//.test(url)) return;
+
+    if (browserCommand) {
+      // Parse command: handle quoted paths like "/mnt/c/Program Files/chrome.exe" --flag
+      const args: string[] = [];
+      let remaining = browserCommand.trim();
+      while (remaining.length > 0) {
+        if (remaining[0] === '"') {
+          const end = remaining.indexOf('"', 1);
+          if (end === -1) {
+            args.push(remaining.slice(1));
+            break;
+          }
+          args.push(remaining.slice(1, end));
+          remaining = remaining.slice(end + 1).trimStart();
+        } else {
+          const space = remaining.indexOf(" ");
+          if (space === -1) {
+            args.push(remaining);
+            break;
+          }
+          args.push(remaining.slice(0, space));
+          remaining = remaining.slice(space + 1).trimStart();
+        }
+      }
+      const exe = args.shift()!;
+      args.push(url);
+      const child = spawn(exe, args, { detached: true, stdio: "ignore" });
+      child.unref();
+      return;
+    }
+
+    // Platform-appropriate fallback
+    const platform = process.platform;
+    if (platform === "linux") {
+      const child = spawn("xdg-open", [url], { detached: true, stdio: "ignore" });
+      child.unref();
+      return;
+    }
+    if (platform === "darwin") {
+      const child = spawn("open", [url], { detached: true, stdio: "ignore" });
+      child.unref();
+      return;
+    }
+    // Windows native Electron — works fine
     return shell.openExternal(url);
+  });
+
+  // Browser detection
+  ipcMain.handle("shell:detect-browsers", () => {
+    return detectBrowsers();
+  });
+
+  // Directory listing with git-ignore detection
+  ipcMain.handle("shell:list-dir", async (_event, folder: string, gitRoot?: string): Promise<DirEntry[]> => {
+    let entries: string[];
+    try {
+      entries = readdirSync(folder);
+    } catch {
+      return [];
+    }
+
+    const result: DirEntry[] = [];
+    for (const name of entries) {
+      try {
+        const st = statSync(join(folder, name));
+        result.push({ name, isDirectory: st.isDirectory() });
+      } catch {
+        // skip entries we can't stat
+      }
+    }
+    result.sort((a, b) => {
+      if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+
+    // Check which entries are gitignored (these are the useful ones to copy)
+    if (gitRoot && result.length > 0) {
+      const paths = result.map((e) => join(folder, e.name));
+      try {
+        // git check-ignore exits 1 when no paths are ignored
+        const { stdout } = await execFile(
+          "git", ["check-ignore", ...paths],
+          { cwd: gitRoot },
+        ).catch((err: any) => {
+          if (err.stdout) return { stdout: err.stdout as string };
+          return { stdout: "" };
+        });
+        const ignoredSet = new Set(stdout.trim().split("\n").filter(Boolean));
+        for (const entry of result) {
+          entry.gitIgnored = ignoredSet.has(join(folder, entry.name));
+        }
+      } catch {
+        // If git isn't available, leave gitIgnored undefined
+      }
+    }
+
+    return result;
   });
 
   // WSL detection

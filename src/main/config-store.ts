@@ -86,6 +86,7 @@ export class ConfigStore {
       branches: [],
       worktreeCopyFiles: input.worktreeCopyFiles,
       terminalTheme: input.terminalTheme,
+      browserCommand: input.browserCommand,
     };
     this.config.projects.push(project);
     this.scheduleSave();
@@ -102,6 +103,7 @@ export class ConfigStore {
     if (input.commands !== undefined) project.commands = input.commands;
     if (input.worktreeCopyFiles !== undefined) project.worktreeCopyFiles = input.worktreeCopyFiles;
     if (input.terminalTheme !== undefined) project.terminalTheme = input.terminalTheme;
+    if (input.browserCommand !== undefined) project.browserCommand = input.browserCommand;
 
     this.scheduleSave();
     return project;
@@ -128,6 +130,7 @@ export class ConfigStore {
     if (input.sidebarWidth !== undefined) this.config.settings.sidebarWidth = input.sidebarWidth;
     if (input.theme !== undefined) this.config.settings.theme = input.theme;
     if (input.terminalTheme !== undefined) this.config.settings.terminalTheme = input.terminalTheme;
+    if (input.browserCommand !== undefined) this.config.settings.browserCommand = input.browserCommand;
     if (input.customThemes !== undefined) this.config.settings.customThemes = input.customThemes;
     this.scheduleSave();
     return this.config.settings;

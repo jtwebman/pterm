@@ -41,8 +41,13 @@ export async function createBranch(project: Project, branchName: string): Promis
       for (const relativePath of matches) {
         const src = path.join(project.folder, relativePath);
         const dest = path.join(worktreePath, relativePath);
-        await fs.mkdir(path.dirname(dest), { recursive: true });
-        await fs.copyFile(src, dest);
+        const stat = await fs.stat(src);
+        if (stat.isDirectory()) {
+          await fs.cp(src, dest, { recursive: true });
+        } else {
+          await fs.mkdir(path.dirname(dest), { recursive: true });
+          await fs.copyFile(src, dest);
+        }
       }
     }
   }

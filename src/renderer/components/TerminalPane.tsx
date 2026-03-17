@@ -32,9 +32,15 @@ export function TerminalPane({ terminal, isVisible }: Props) {
   searchVisibleRef.current = searchVisible;
   const searchQueryRef = useRef("");
 
+  // Keep a ref for browser command so the WebLinksAddon closure stays current
+  const browserCommandRef = useRef("");
+  const projectBrowserRef = useRef<string | undefined>(undefined);
+
   // Resolve terminal theme: project override > default setting > fallback to app theme
   const project = state.projects.find((p) => p.id === terminal.projectId);
   const effectiveThemeId = project?.terminalTheme || state.terminalTheme || undefined;
+  browserCommandRef.current = state.browserCommand;
+  projectBrowserRef.current = project?.browserCommand;
   const xtermTheme = resolveTheme(effectiveThemeId, state.resolvedTheme, state.customThemes);
 
   // Sync font size changes into a live terminal
@@ -99,7 +105,8 @@ export function TerminalPane({ terminal, isVisible }: Props) {
 
     // Clickable URLs
     const webLinksAddon = new WebLinksAddon((_event, url) => {
-      bridge.shell.openExternal(url);
+      const cmd = projectBrowserRef.current || browserCommandRef.current || undefined;
+      bridge.shell.openExternal(url, cmd);
     });
     xterm.loadAddon(webLinksAddon);
 

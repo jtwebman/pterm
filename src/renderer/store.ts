@@ -21,6 +21,7 @@ export interface AppState {
   sidebarWidth: number;
   theme: "system" | "dark" | "light";
   terminalTheme: string;
+  browserCommand: string;
   resolvedTheme: "dark" | "light";
   customThemes: CustomTerminalTheme[];
   branchNames: Record<string, string>;
@@ -34,6 +35,7 @@ const initialState: AppState = {
   sidebarWidth: 250,
   theme: "system",
   terminalTheme: "",
+  browserCommand: "",
   resolvedTheme: "dark",
   customThemes: [],
   branchNames: {},
@@ -56,6 +58,7 @@ export type AppAction =
   | { type: "SET_SIDEBAR_WIDTH"; sidebarWidth: number }
   | { type: "SET_THEME"; theme: "system" | "dark" | "light" }
   | { type: "SET_TERMINAL_THEME"; terminalTheme: string }
+  | { type: "SET_BROWSER_COMMAND"; browserCommand: string }
   | { type: "SET_CUSTOM_THEMES"; customThemes: CustomTerminalTheme[] }
   | { type: "SET_RESOLVED_THEME"; resolvedTheme: "dark" | "light" }
   | { type: "REORDER_TERMINAL"; draggedKey: string; beforeKey: string | null }
@@ -127,6 +130,8 @@ function reducer(state: AppState, action: AppAction): AppState {
       return { ...state, theme: action.theme };
     case "SET_TERMINAL_THEME":
       return { ...state, terminalTheme: action.terminalTheme };
+    case "SET_BROWSER_COMMAND":
+      return { ...state, browserCommand: action.browserCommand };
     case "SET_CUSTOM_THEMES":
       return { ...state, customThemes: action.customThemes };
     case "SET_RESOLVED_THEME":
@@ -222,6 +227,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         dispatch({ type: "SET_THEME", theme: settings.theme });
         if (settings.terminalTheme) {
           dispatch({ type: "SET_TERMINAL_THEME", terminalTheme: settings.terminalTheme });
+        }
+        if (settings.browserCommand) {
+          dispatch({ type: "SET_BROWSER_COMMAND", browserCommand: settings.browserCommand });
         }
         if (settings.customThemes?.length) {
           dispatch({ type: "SET_CUSTOM_THEMES", customThemes: settings.customThemes });
