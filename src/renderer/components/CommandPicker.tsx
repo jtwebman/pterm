@@ -60,6 +60,10 @@ export function CommandPicker({ project, asModal, onClose, defaultBranchId }: Pr
         name: newBranchName.trim(),
       });
       branchId = branch.id;
+      // Refresh project in store so the new branch appears in the sidebar
+      const projects = await bridge.project.list();
+      const updated = projects.find((p) => p.id === project.id);
+      if (updated) dispatch({ type: "UPDATE_PROJECT", project: updated });
     }
 
     const terminalId = crypto.randomUUID();
