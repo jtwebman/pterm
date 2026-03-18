@@ -12,6 +12,8 @@ let tmpDir: string;
 
 test.beforeEach(async () => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "pterm-test-"));
+  // Prevent zsh first-run wizard from intercepting the shell
+  fs.writeFileSync(path.join(tmpDir, ".zshrc"), "");
   ({ app, page } = await launchApp(tmpDir));
 });
 
@@ -160,4 +162,51 @@ test("create branch, verify sidebar, delete via branch manager", async () => {
   const remaining = fs.readdirSync(worktreeDir, { recursive: true }) as string[];
   const branchDirs = remaining.filter((f) => f.includes("test-feature"));
   expect(branchDirs.length).toBe(0);
+});
+
+test("sidebar updates when branch changes via shell", async () => {
+  // Set up a git repo as the project folder
+  const projectDir = path.join(tmpDir, "branch-watch-test");
+  fs.mkdirSync(projectDir, { recursive: true });
+  execFileSync("git", ["init"], { cwd: projectDir });
+  execFileSync("git", ["config", "user.email", "test@test.com"], { cwd: projectDir });
+  execFileSync("git", ["config", "user.name", "Test"], { cwd: projectDir });
+  fs.writeFileSync(path.join(projectDir, "README.md"), "test");
+  execFileSync("git", ["add", "."], { cwd: projectDir });
+  execFileSync("git", ["commit", "-m", "init"], { cwd: projectDir });
+
+  await createProject(page, "Watch Test", projectDir);
+
+  // Sidebar should show the initial branch (main or master)
+  const initialBranch = execFileSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], {
+    cwd: projectDir,
+  }).toString().trim();
+  await expect(page.getByText(`Watch Test (${initialBranch})`)).toBeVisible({ timeout: 3_000 });
+
+  // Launch a shell terminal
+  await launchShellTerminal(page);
+
+  // Focus terminal and wait for shell prompt to be ready
+  await page.locator(".xterm-screen").click();
+  await page.waitForTimeout(2_000);
+
+  // Create and switch to a new branch via the shell
+  await page.keyboard.type("git checkout -b random-branch", { delay: 20 });
+  await page.keyboard.press("Enter");
+
+  // Wait for git output to confirm the command succeeded
+  await expect(page.locator(".xterm-rows")).toContainText("random-branch", { timeout: 5_000 });
+
+  // Sidebar should update to show the new branch name
+  await expect(page.getByText("Watch Test (random-branch)")).toBeVisible({ timeout: 5_000 });
+
+  // Switch back to the original branch
+  await page.keyboard.type(`git checkout ${initialBranch}`, { delay: 20 });
+  await page.keyboard.press("Enter");
+
+  // Wait for git output to confirm
+  await expect(page.locator(".xterm-rows")).toContainText(`Switched to branch '${initialBranch}'`, { timeout: 5_000 });
+
+  // Sidebar should update back
+  await expect(page.getByText(`Watch Test (${initialBranch})`)).toBeVisible({ timeout: 5_000 });
 });

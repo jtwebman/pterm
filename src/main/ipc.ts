@@ -164,23 +164,29 @@ export function registerIpcHandlers(
   ipcMain.handle("git:watch-branch", (_event, folder: string) => {
     if (gitWatchers.has(folder)) return;
 
-    // Resolve HEAD path — worktrees have a .git file pointing to the real gitdir
-    let headPath = join(folder, ".git", "HEAD");
+    // Resolve the directory containing HEAD.
+    // For normal repos: .git/HEAD  →  watch .git/ directory
+    // For worktrees: .git is a file with "gitdir: /path" → watch that directory
+    let watchDir = join(folder, ".git");
+    let headFilename = "HEAD";
     try {
-      const dotgit = join(folder, ".git");
-      const st = statSync(dotgit);
+      const st = statSync(watchDir);
       if (st.isFile()) {
         // Worktree: .git is a file like "gitdir: /path/to/.git/worktrees/branch-name"
-        const content = readFileSync(dotgit, "utf-8").trim();
+        const content = readFileSync(watchDir, "utf-8").trim();
         const match = content.match(/^gitdir:\s*(.+)$/);
         if (match) {
-          headPath = join(match[1], "HEAD");
+          watchDir = match[1];
         }
       }
     } catch { /* fall back to default */ }
 
     try {
-      const watcher = watch(headPath, { persistent: false }, async () => {
+      // Watch the directory — git replaces HEAD atomically (write tmp + rename)
+      // which can break file-level watchers on Linux. Directory watchers see
+      // the rename event with the filename.
+      const watcher = watch(watchDir, { persistent: false }, async (_eventType, filename) => {
+        if (filename && filename !== headFilename) return;
         try {
           const { stdout } = await execFile("git", ["rev-parse", "--abbrev-ref", "HEAD"], { cwd: folder });
           const branch = stdout.trim();
@@ -191,7 +197,7 @@ export function registerIpcHandlers(
         } catch { /* not a git repo anymore or detached HEAD */ }
       });
       gitWatchers.set(folder, watcher);
-    } catch { /* HEAD doesn't exist */ }
+    } catch { /* directory doesn't exist */ }
   });
 
   ipcMain.handle("git:unwatch-branch", (_event, folder: string) => {
