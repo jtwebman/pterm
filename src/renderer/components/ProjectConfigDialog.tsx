@@ -9,9 +9,12 @@ interface Props {
   onClose: () => void;
 }
 
+type Tab = "general" | "commands" | "worktree";
+
 export function ProjectConfigDialog({ project, onClose }: Props) {
   const { state, dispatch } = useApp();
   const isEdit = !!project;
+  const [tab, setTab] = useState<Tab>("general");
 
   const [name, setName] = useState(project?.name ?? "");
   const [folder, setFolder] = useState(project?.folder ?? "");
@@ -34,7 +37,6 @@ export function ProjectConfigDialog({ project, onClose }: Props) {
     bridge.shell.detectBrowsers().then(setDetectedBrowsers);
   }, []);
 
-  // Detect available commands when creating a new project
   useEffect(() => {
     if (isEdit) return;
     bridge.shell.detectCommands().then((detected) => {
@@ -49,7 +51,6 @@ export function ProjectConfigDialog({ project, onClose }: Props) {
     });
   }, [isEdit]);
 
-  // Detect WSL distros on Windows
   useEffect(() => {
     if (bridge.platform !== "win32") return;
     bridge.shell.detectWsl().then(setWslDistros);
@@ -106,33 +107,23 @@ export function ProjectConfigDialog({ project, onClose }: Props) {
     onClose();
   }
 
-  function addEnvVar() {
-    setEnvVars([...envVars, ["", ""]]);
-  }
-
+  function addEnvVar() { setEnvVars([...envVars, ["", ""]]); }
   function updateEnvVar(index: number, key: string, value: string) {
     const updated = [...envVars];
     updated[index] = [key, value];
     setEnvVars(updated);
   }
-
-  function removeEnvVar(index: number) {
-    setEnvVars(envVars.filter((_, i) => i !== index));
-  }
+  function removeEnvVar(index: number) { setEnvVars(envVars.filter((_, i) => i !== index)); }
 
   function addCommand() {
     setCommands([...commands, { id: crypto.randomUUID(), name: "", command: "", type: "shell" as const }]);
   }
-
   function updateCommand(index: number, field: keyof Command, value: string) {
     const updated = [...commands];
     updated[index] = { ...updated[index], [field]: value };
     setCommands(updated);
   }
-
-  function removeCommand(index: number) {
-    setCommands(commands.filter((_, i) => i !== index));
-  }
+  function removeCommand(index: number) { setCommands(commands.filter((_, i) => i !== index)); }
 
   function handleTreeSelect(relativePath: string) {
     if (!worktreeCopyFiles.includes(relativePath)) {
@@ -140,255 +131,267 @@ export function ProjectConfigDialog({ project, onClose }: Props) {
     }
   }
 
+  const tabs: { id: Tab; label: string }[] = [
+    { id: "general", label: "General" },
+    { id: "commands", label: "Commands" },
+    { id: "worktree", label: "Worktree" },
+  ];
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-gray-100 dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg shadow-xl w-full max-w-lg mx-4 max-h-[80vh] overflow-y-auto">
+      <div className="bg-gray-100 dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg shadow-xl w-full max-w-lg mx-4 flex flex-col" style={{ maxHeight: "85vh" }}>
         <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-800">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
             {isEdit ? "Edit Project" : "New Project"}
           </h2>
         </div>
 
-        <div className="px-6 py-4 space-y-4">
-          {/* Name */}
-          <div>
-            <label className="block text-sm text-gray-500 dark:text-gray-400 mb-1">Name</label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-blue-500"
-              placeholder="My Project"
-            />
-          </div>
-
-          {/* Folder */}
-          <div>
-            <label className="block text-sm text-gray-500 dark:text-gray-400 mb-1">Folder</label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={folder}
-                onChange={(e) => setFolder(e.target.value)}
-                className="flex-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-blue-500"
-                placeholder="/path/to/project"
-              />
-              <button
-                onClick={handlePickFolder}
-                className="px-3 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-sm text-gray-700 dark:text-gray-300 rounded"
-              >
-                Browse
-              </button>
-            </div>
-          </div>
-
-          {/* Terminal Theme */}
-          <div>
-            <label className="block text-sm text-gray-500 dark:text-gray-400 mb-1">Terminal Theme</label>
-            <select
-              value={terminalTheme}
-              onChange={(e) => setTerminalTheme(e.target.value)}
-              className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-blue-500"
+        {/* Tabs */}
+        <div className="flex border-b border-gray-200 dark:border-gray-800 px-6">
+          {tabs.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={`px-4 py-2 text-sm border-b-2 -mb-px ${
+                tab === t.id
+                  ? "border-blue-500 text-blue-600 dark:text-blue-400"
+                  : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+              }`}
             >
-              <option value="">Default</option>
-              <optgroup label="Built-in">
-                {Object.entries(BUILTIN_THEMES).map(([id, t]) => (
-                  <option key={id} value={id}>{t.name}</option>
-                ))}
-              </optgroup>
-              {state.customThemes.length > 0 && (
-                <optgroup label="Custom">
-                  {state.customThemes.map((t) => (
-                    <option key={t.id} value={t.id}>{t.name}</option>
-                  ))}
-                </optgroup>
-              )}
-            </select>
-          </div>
+              {t.label}
+            </button>
+          ))}
+        </div>
 
-          {/* Browser */}
-          <div>
-            <label className="block text-sm text-gray-500 dark:text-gray-400 mb-1">Browser</label>
-            <select
-              value={browserCommand}
-              onChange={(e) => setBrowserCommand(e.target.value)}
-              className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-blue-500"
-            >
-              <option value="">Default (use global setting)</option>
-              <option value="system">System default (xdg-open)</option>
-              {detectedBrowsers.map((b) => {
-                const options = [];
-                options.push(
-                  <option key={b.command} value={`"${b.command}"`}>
-                    {b.name}
-                  </option>
-                );
-                if (b.profiles) {
-                  for (const p of b.profiles) {
-                    const cmd = `"${b.command}" --profile-directory="${p.directory}"`;
-                    options.push(
-                      <option key={cmd} value={cmd}>
-                        {b.name} — {p.name}
-                      </option>
-                    );
-                  }
-                }
-                return options;
-              })}
-            </select>
-          </div>
-
-          {/* Env Vars */}
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="text-sm text-gray-500 dark:text-gray-400">Environment Variables</label>
-              <button onClick={addEnvVar} className="text-xs text-blue-400 hover:text-blue-300">
-                + Add
-              </button>
-            </div>
-            {envVars.map(([key, value], i) => (
-              <div key={i} className="flex gap-2 mb-2">
+        {/* Tab content */}
+        <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4">
+          {tab === "general" && (
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm text-gray-500 dark:text-gray-400 mb-1">Name</label>
                 <input
                   type="text"
-                  value={key}
-                  onChange={(e) => updateEnvVar(i, e.target.value, value)}
-                  className="flex-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded px-2 py-1.5 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-blue-500"
-                  placeholder="KEY"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-blue-500"
+                  placeholder="My Project"
                 />
-                <input
-                  type="text"
-                  value={value}
-                  onChange={(e) => updateEnvVar(i, key, e.target.value)}
-                  className="flex-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded px-2 py-1.5 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-blue-500"
-                  placeholder="value"
-                />
-                <button
-                  onClick={() => removeEnvVar(i)}
-                  className="text-gray-400 dark:text-gray-500 hover:text-red-400 px-1"
-                >
-                  &times;
-                </button>
               </div>
-            ))}
-          </div>
 
-          {/* Commands */}
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="text-sm text-gray-500 dark:text-gray-400">Commands</label>
-              <button onClick={addCommand} className="text-xs text-blue-400 hover:text-blue-300">
-                + Add
-              </button>
-            </div>
-            {commands.map((cmd, i) => (
-              <div key={cmd.id} className="flex gap-2 mb-2">
-                <input
-                  type="text"
-                  value={cmd.name}
-                  onChange={(e) => updateCommand(i, "name", e.target.value)}
-                  className="w-1/3 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded px-2 py-1.5 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-blue-500"
-                  placeholder="Name"
-                />
-                <input
-                  type="text"
-                  value={cmd.command}
-                  onChange={(e) => updateCommand(i, "command", e.target.value)}
-                  className="flex-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded px-2 py-1.5 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-blue-500"
-                  placeholder="Command (empty = shell)"
-                />
-                <button
-                  onClick={() => removeCommand(i)}
-                  className="text-gray-400 dark:text-gray-500 hover:text-red-400 px-1"
-                >
-                  &times;
-                </button>
-              </div>
-            ))}
-          </div>
-
-          {/* Worktree Copy Files */}
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="text-sm text-gray-500 dark:text-gray-400">Worktree Copy Files</label>
-              <div className="flex gap-2">
-                {folder.trim() && (
-                  <button onClick={() => setFileBrowserOpen(!fileBrowserOpen)} className="text-xs text-blue-400 hover:text-blue-300">
+              <div>
+                <label className="block text-sm text-gray-500 dark:text-gray-400 mb-1">Folder</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={folder}
+                    onChange={(e) => setFolder(e.target.value)}
+                    className="flex-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-blue-500"
+                    placeholder="/path/to/project"
+                  />
+                  <button
+                    onClick={handlePickFolder}
+                    className="px-3 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-sm text-gray-700 dark:text-gray-300 rounded"
+                  >
                     Browse
                   </button>
-                )}
-                <button onClick={() => setWorktreeCopyFiles([...worktreeCopyFiles, ""])} className="text-xs text-blue-400 hover:text-blue-300">
-                  + Add
-                </button>
+                </div>
               </div>
-            </div>
-            <p className="text-xs text-gray-400 dark:text-gray-500 mb-2">
-              Files, folders, or glob patterns to copy into new worktrees (e.g. .env, .env.*, config/)
-            </p>
-            {worktreeCopyFiles.map((pattern, i) => (
-              <div key={i} className="flex gap-2 mb-2">
-                <input
-                  type="text"
-                  value={pattern}
-                  onChange={(e) => {
-                    const updated = [...worktreeCopyFiles];
-                    updated[i] = e.target.value;
-                    setWorktreeCopyFiles(updated);
-                  }}
-                  className="flex-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded px-2 py-1.5 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-blue-500"
-                  placeholder=".env"
-                />
-                <button
-                  onClick={() => setWorktreeCopyFiles(worktreeCopyFiles.filter((_, j) => j !== i))}
-                  className="text-gray-400 dark:text-gray-500 hover:text-red-400 px-1"
+
+              <div>
+                <label className="block text-sm text-gray-500 dark:text-gray-400 mb-1">Terminal Theme</label>
+                <select
+                  value={terminalTheme}
+                  onChange={(e) => setTerminalTheme(e.target.value)}
+                  className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-blue-500"
                 >
-                  &times;
-                </button>
+                  <option value="">Default</option>
+                  <optgroup label="Built-in">
+                    {Object.entries(BUILTIN_THEMES).map(([id, t]) => (
+                      <option key={id} value={id}>{t.name}</option>
+                    ))}
+                  </optgroup>
+                  {state.customThemes.length > 0 && (
+                    <optgroup label="Custom">
+                      {state.customThemes.map((t) => (
+                        <option key={t.id} value={t.id}>{t.name}</option>
+                      ))}
+                    </optgroup>
+                  )}
+                </select>
               </div>
-            ))}
-            {fileBrowserOpen && folder.trim() && (
-              <div className="mt-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded overflow-hidden">
-                <div className="flex items-center justify-between px-2 py-1.5 bg-gray-50 dark:bg-gray-750 border-b border-gray-200 dark:border-gray-700">
-                  <span className="text-xs text-gray-500 dark:text-gray-400">Select files & folders</span>
+
+              <div>
+                <label className="block text-sm text-gray-500 dark:text-gray-400 mb-1">Browser</label>
+                <select
+                  value={browserCommand}
+                  onChange={(e) => setBrowserCommand(e.target.value)}
+                  className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-blue-500"
+                >
+                  <option value="">Default (use global setting)</option>
+                  <option value="system">System default (xdg-open)</option>
+                  {detectedBrowsers.map((b) => {
+                    const options = [];
+                    options.push(
+                      <option key={b.command} value={`"${b.command}"`}>
+                        {b.name}
+                      </option>
+                    );
+                    if (b.profiles) {
+                      for (const p of b.profiles) {
+                        const cmd = `"${b.command}" --profile-directory="${p.directory}"`;
+                        options.push(
+                          <option key={cmd} value={cmd}>
+                            {b.name} — {p.name}
+                          </option>
+                        );
+                      }
+                    }
+                    return options;
+                  })}
+                </select>
+              </div>
+
+              {/* Env Vars */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-sm text-gray-500 dark:text-gray-400">Environment Variables</label>
+                  <button onClick={addEnvVar} className="text-xs text-blue-400 hover:text-blue-300">+ Add</button>
+                </div>
+                {envVars.map(([key, value], i) => (
+                  <div key={i} className="flex gap-2 mb-2">
+                    <input
+                      type="text"
+                      value={key}
+                      onChange={(e) => updateEnvVar(i, e.target.value, value)}
+                      className="flex-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded px-2 py-1.5 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-blue-500"
+                      placeholder="KEY"
+                    />
+                    <input
+                      type="text"
+                      value={value}
+                      onChange={(e) => updateEnvVar(i, key, e.target.value)}
+                      className="flex-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded px-2 py-1.5 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-blue-500"
+                      placeholder="value"
+                    />
+                    <button onClick={() => removeEnvVar(i)} className="text-gray-400 dark:text-gray-500 hover:text-red-400 px-1">&times;</button>
+                  </div>
+                ))}
+              </div>
+
+              {wslDistros.length > 0 && (
+                <div>
+                  <label className="block text-sm text-gray-500 dark:text-gray-400 mb-1">WSL Distros Available</label>
+                  <div className="text-xs text-gray-500 dark:text-gray-400 space-y-1">
+                    {wslDistros.map((d) => (
+                      <div key={d} className="px-2 py-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded">{d}</div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {tab === "commands" && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-gray-400 dark:text-gray-500">
+                  Define commands that can launch as terminals. Empty command = interactive shell.
+                </p>
+                <button onClick={addCommand} className="text-xs text-blue-400 hover:text-blue-300 shrink-0 ml-2">+ Add</button>
+              </div>
+              {commands.map((cmd, i) => (
+                <div key={cmd.id} className="flex gap-2">
+                  <input
+                    type="text"
+                    value={cmd.name}
+                    onChange={(e) => updateCommand(i, "name", e.target.value)}
+                    className="w-1/3 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded px-2 py-1.5 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-blue-500"
+                    placeholder="Name"
+                  />
+                  <input
+                    type="text"
+                    value={cmd.command}
+                    onChange={(e) => updateCommand(i, "command", e.target.value)}
+                    className="flex-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded px-2 py-1.5 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-blue-500"
+                    placeholder="Command (empty = shell)"
+                  />
+                  <button onClick={() => removeCommand(i)} className="text-gray-400 dark:text-gray-500 hover:text-red-400 px-1">&times;</button>
+                </div>
+              ))}
+              {commands.length === 0 && (
+                <div className="text-sm text-gray-400 dark:text-gray-500 text-center py-4">No commands configured</div>
+              )}
+            </div>
+          )}
+
+          {tab === "worktree" && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-gray-400 dark:text-gray-500">
+                  Files, folders, or glob patterns to copy into new worktrees.
+                </p>
+                <div className="flex gap-2 shrink-0 ml-2">
+                  {folder.trim() && (
+                    <button onClick={() => setFileBrowserOpen(!fileBrowserOpen)} className="text-xs text-blue-400 hover:text-blue-300">
+                      Browse
+                    </button>
+                  )}
+                  <button onClick={() => setWorktreeCopyFiles([...worktreeCopyFiles, ""])} className="text-xs text-blue-400 hover:text-blue-300">
+                    + Add
+                  </button>
+                </div>
+              </div>
+              {worktreeCopyFiles.map((pattern, i) => (
+                <div key={i} className="flex gap-2">
+                  <input
+                    type="text"
+                    value={pattern}
+                    onChange={(e) => {
+                      const updated = [...worktreeCopyFiles];
+                      updated[i] = e.target.value;
+                      setWorktreeCopyFiles(updated);
+                    }}
+                    className="flex-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded px-2 py-1.5 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-blue-500"
+                    placeholder=".env"
+                  />
                   <button
-                    onClick={() => setFileBrowserOpen(false)}
-                    className="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-900 dark:hover:text-gray-200 shrink-0 ml-2"
+                    onClick={() => setWorktreeCopyFiles(worktreeCopyFiles.filter((_, j) => j !== i))}
+                    className="text-gray-400 dark:text-gray-500 hover:text-red-400 px-1"
                   >
                     &times;
                   </button>
                 </div>
-                <div className="max-h-64 overflow-y-auto py-1">
-                  <FileTree
-                    rootFolder={folder}
-                    parentPath=""
-                    selectedPaths={worktreeCopyFiles}
-                    onSelect={handleTreeSelect}
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* WSL Distros (Windows only) */}
-          {wslDistros.length > 0 && (
-            <div>
-              <label className="block text-sm text-gray-500 dark:text-gray-400 mb-1">
-                WSL Distros Available
-              </label>
-              <div className="text-xs text-gray-500 dark:text-gray-400 space-y-1">
-                {wslDistros.map((d) => (
-                  <div key={d} className="px-2 py-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded">
-                    {d}
+              ))}
+              {fileBrowserOpen && folder.trim() && (
+                <div className="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded overflow-hidden">
+                  <div className="flex items-center justify-between px-2 py-1.5 bg-gray-50 dark:bg-gray-750 border-b border-gray-200 dark:border-gray-700">
+                    <span className="text-xs text-gray-500 dark:text-gray-400">Select files & folders</span>
+                    <button
+                      onClick={() => setFileBrowserOpen(false)}
+                      className="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-900 dark:hover:text-gray-200 shrink-0 ml-2"
+                    >
+                      &times;
+                    </button>
                   </div>
-                ))}
-              </div>
-              <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                Use shell type "wsl" in commands to launch in a WSL distro.
-              </p>
+                  <div className="max-h-64 overflow-y-auto py-1">
+                    <FileTree
+                      rootFolder={folder}
+                      parentPath=""
+                      selectedPaths={worktreeCopyFiles}
+                      onSelect={handleTreeSelect}
+                    />
+                  </div>
+                </div>
+              )}
+              {worktreeCopyFiles.length === 0 && !fileBrowserOpen && (
+                <div className="text-sm text-gray-400 dark:text-gray-500 text-center py-4">No copy files configured</div>
+              )}
             </div>
           )}
         </div>
 
-        <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-800 flex justify-between">
+        {/* Footer */}
+        <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-800 flex justify-between shrink-0">
           <div>
             {isEdit && (
               <button
@@ -485,7 +488,6 @@ function FileTreeNode({
   const relativePath = parentPath ? `${parentPath}/${entry.name}` : entry.name;
   const alreadyAdded = selectedPaths.includes(relativePath);
   const depth = parentPath ? parentPath.split("/").length : 0;
-  // Tracked files (not gitignored) are already in a worktree — grey them out
   const tracked = entry.gitIgnored === false;
 
   function handleClick() {
