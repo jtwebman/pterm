@@ -22,7 +22,7 @@ import { detectBrowsers } from "./browser-detector.js";
 import type { BrowserWindow } from "electron";
 import { execFile as execFileCb, spawn } from "node:child_process";
 import { promisify } from "node:util";
-import { watch, type FSWatcher, readdirSync, statSync } from "node:fs";
+import { watch, type FSWatcher, readdirSync, statSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { DirEntry } from "../shared/types.js";
 
@@ -163,7 +163,22 @@ export function registerIpcHandlers(
 
   ipcMain.handle("git:watch-branch", (_event, folder: string) => {
     if (gitWatchers.has(folder)) return;
-    const headPath = join(folder, ".git", "HEAD");
+
+    // Resolve HEAD path — worktrees have a .git file pointing to the real gitdir
+    let headPath = join(folder, ".git", "HEAD");
+    try {
+      const dotgit = join(folder, ".git");
+      const st = statSync(dotgit);
+      if (st.isFile()) {
+        // Worktree: .git is a file like "gitdir: /path/to/.git/worktrees/branch-name"
+        const content = readFileSync(dotgit, "utf-8").trim();
+        const match = content.match(/^gitdir:\s*(.+)$/);
+        if (match) {
+          headPath = join(match[1], "HEAD");
+        }
+      }
+    } catch { /* fall back to default */ }
+
     try {
       const watcher = watch(headPath, { persistent: false }, async () => {
         try {
@@ -176,7 +191,7 @@ export function registerIpcHandlers(
         } catch { /* not a git repo anymore or detached HEAD */ }
       });
       gitWatchers.set(folder, watcher);
-    } catch { /* .git/HEAD doesn't exist */ }
+    } catch { /* HEAD doesn't exist */ }
   });
 
   ipcMain.handle("git:unwatch-branch", (_event, folder: string) => {

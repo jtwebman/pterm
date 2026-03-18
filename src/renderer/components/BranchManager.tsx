@@ -259,24 +259,21 @@ export function BranchManager({ project, onClose }: Props) {
           {project.branches.length > 0 && (
             <div>
               <div className="text-xs text-gray-500 dark:text-gray-400 mb-1.5">Worktree branches</div>
-              <div className="space-y-1">
+              <div className="space-y-2">
                 {project.branches.map((b) => (
-                  <div key={b.id} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-black/5 dark:hover:bg-white/5">
-                    <span className="text-sm text-gray-700 dark:text-gray-300 flex-1 truncate">
-                      {b.name}
-                    </span>
-                    <span className="text-xs text-gray-400 dark:text-gray-500 truncate max-w-[120px]">
-                      {state.branchNames[b.folder] ?? ""}
-                    </span>
-                    <button
-                      onClick={() => handleDelete(b.id)}
-                      disabled={deleting === b.id}
-                      className="text-gray-400 dark:text-gray-500 hover:text-red-500 disabled:opacity-50 shrink-0"
-                      title="Delete branch"
-                    >
-                      &times;
-                    </button>
-                  </div>
+                  <WorktreeBranchRow
+                    key={b.id}
+                    branch={b}
+                    project={project}
+                    gitBranches={gitBranches}
+                    currentBranch={state.branchNames[b.folder]}
+                    deleting={deleting === b.id}
+                    onDelete={() => handleDelete(b.id)}
+                    onCheckout={async (folder, branchName) => {
+                      await bridge.git.checkout(folder, branchName);
+                      dispatch({ type: "SET_BRANCH_NAME", folder, branchName });
+                    }}
+                  />
                 ))}
               </div>
             </div>
@@ -294,5 +291,82 @@ export function BranchManager({ project, onClose }: Props) {
       </div>
     </div>,
     document.body
+  );
+}
+
+function WorktreeBranchRow({
+  branch,
+  project,
+  gitBranches,
+  currentBranch,
+  deleting,
+  onDelete,
+  onCheckout,
+}: {
+  branch: { id: string; name: string; folder: string };
+  project: Project;
+  gitBranches: string[];
+  currentBranch?: string;
+  deleting: boolean;
+  onDelete: () => void;
+  onCheckout: (folder: string, branch: string) => Promise<void>;
+}) {
+  const [switchInput, setSwitchInput] = useState("");
+  const [switchError, setSwitchError] = useState("");
+  const [switching, setSwitching] = useState(false);
+
+  async function handleSwitch() {
+    const name = switchInput.trim();
+    if (!name) return;
+    setSwitchError("");
+    setSwitching(true);
+    try {
+      await onCheckout(branch.folder, name);
+      setSwitchInput("");
+    } catch (err: any) {
+      setSwitchError(err.message || "Checkout failed");
+    } finally {
+      setSwitching(false);
+    }
+  }
+
+  return (
+    <div className="px-2 py-1.5 rounded hover:bg-black/5 dark:hover:bg-white/5">
+      <div className="flex items-center gap-2">
+        <span className="text-sm text-gray-700 dark:text-gray-300 flex-1 truncate">
+          {branch.name}
+        </span>
+        <span className="text-xs text-gray-400 dark:text-gray-500 truncate max-w-[120px]">
+          {currentBranch ?? ""}
+        </span>
+        <button
+          onClick={onDelete}
+          disabled={deleting}
+          className="text-gray-400 dark:text-gray-500 hover:text-red-500 disabled:opacity-50 shrink-0"
+          title="Delete branch"
+        >
+          &times;
+        </button>
+      </div>
+      <div className="flex items-center gap-2 mt-1.5">
+        <BranchAutocomplete
+          value={switchInput}
+          onChange={setSwitchInput}
+          onSubmit={handleSwitch}
+          placeholder="Switch branch..."
+          branches={gitBranches}
+        />
+        <button
+          onClick={handleSwitch}
+          disabled={!switchInput.trim() || switching}
+          className="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded shrink-0"
+        >
+          Switch
+        </button>
+      </div>
+      {switchError && (
+        <div className="text-xs text-red-500 mt-1">{switchError}</div>
+      )}
+    </div>
   );
 }
