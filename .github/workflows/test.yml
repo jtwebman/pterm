@@ -7,7 +7,34 @@ on:
     branches: [main]
 
 jobs:
-  test:
+  check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Format check
+        run: npx vp fmt --check src/
+
+      - name: Lint and typecheck
+        run: npx vp lint src/
+
+      - name: Build
+        run: npm run build
+
+      - name: Unit tests
+        run: npx vp test run src/
+
+  e2e:
+    needs: check
     strategy:
       fail-fast: false
       matrix:
@@ -33,13 +60,13 @@ jobs:
         run: npm run build
 
       # Linux needs a virtual framebuffer for Electron's GUI
-      - name: Run tests (Linux)
+      - name: Run e2e tests (Linux)
         if: runner.os == 'Linux'
         run: xvfb-run --auto-servernum npx playwright test
         env:
           CI: true
 
-      - name: Run tests (macOS)
+      - name: Run e2e tests (macOS)
         if: runner.os == 'macOS'
         run: npx playwright test
         env:

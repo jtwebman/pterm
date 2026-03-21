@@ -1,0 +1,46 @@
+<svg width="1280" height="640" viewBox="0 0 1280 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="iconbg" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1E293B"/>
+      <stop offset="1" stop-color="#0F172A"/>
+    </linearGradient>
+    <linearGradient id="folder" x1="280" y1="280" x2="460" y2="460" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#38BDF8"/>
+      <stop offset="1" stop-color="#0EA5E9"/>
+    </linearGradient>
+    <linearGradient id="foldertab" x1="280" y1="260" x2="360" y2="290" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7DD3FC"/>
+      <stop offset="1" stop-color="#38BDF8"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Icon centered and scaled up to fill most of the height -->
+  <g transform="translate(384, 14) scale(1.196)">
+    <!-- Rounded background -->
+    <rect width="512" height="512" rx="90" fill="url(#iconbg)"/>
+
+    <!-- Terminal window border -->
+    <rect x="24" y="56" width="464" height="400" rx="20" fill="#0F172A" stroke="#334155" stroke-width="3"/>
+
+    <!-- Title bar -->
+    <rect x="24" y="56" width="464" height="48" rx="20" fill="#1E293B"/>
+    <rect x="24" y="84" width="464" height="20" fill="#1E293B"/>
+    <!-- Window dots -->
+    <circle cx="60" cy="80" r="10" fill="#EF4444"/>
+    <circle cx="92" cy="80" r="10" fill="#EAB308"/>
+    <circle cx="124" cy="80" r="10" fill="#22C55E"/>
+
+    <!-- Terminal prompt line 1 -->
+    <path d="M56 155L96 185L56 215" stroke="#22D3EE" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+    <line x1="116" y1="215" x2="200" y2="215" stroke="#64748B" stroke-width="10" stroke-linecap="round"/>
+
+    <!-- Terminal prompt line 2 -->
+    <path d="M56 255L96 285L56 315" stroke="#22D3EE" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" opacity="0.5"/>
+    <line x1="116" y1="315" x2="176" y2="315" stroke="#64748B" stroke-width="10" stroke-linecap="round" opacity="0.4"/>
+
+    <!-- Folder icon -->
+    <path d="M310 320H364C370 320 376 314 376 308V296C376 290 370 284 364 284H340L326 268H296C290 268 284 274 284 280V308C284 314 290 320 296 320Z" fill="url(#foldertab)"/>
+    <rect x="284" y="308" width="204" height="148" rx="16" fill="url(#folder)"/>
+    <rect x="296" y="332" width="180" height="112" rx="10" fill="#0EA5E9" opacity="0.3"/>
+  </g>
+</svg>
