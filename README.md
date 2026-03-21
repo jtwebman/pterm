@@ -13,7 +13,7 @@
 
 ---
 
-pterm gives every project its own workspace with terminals, environment variables, configurable commands, and git worktree branches — all in one window. Run shells, Claude, Codex, OpenCode, or any CLI tool in real terminal panes without juggling tabs across multiple apps.
+pterm gives every project its own workspace with terminals, environment variables, configurable commands, and git worktree branches — all in one window. Run shells, Claude, Codex, OpenCode, or any CLI tool in real terminal panes without having to remember which tabs are for which project.
 
 ## Features
 
