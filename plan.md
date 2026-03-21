@@ -157,14 +157,21 @@ pterm/
 │   ├── main/                              # Electron main process
 │   │   ├── index.ts                       # app lifecycle, BrowserWindow, menus
 │   │   ├── ipc.ts                         # ipcMain handlers (terminal, project, branch, settings)
-│   │   ├── terminal-manager.ts            # PTY lifecycle, activity polling, events
+│   │   ├── terminal-manager.ts            # PTY lifecycle, activity polling via CommandSession
 │   │   ├── shell-resolver.ts              # cross-platform shell fallback chains
 │   │   ├── config-store.ts                # JSON file CRUD for projects + settings
-│   │   ├── branch-manager.ts              # folder copy/delete
+│   │   ├── session-store.ts               # SQLite persistence for terminal sessions + scrollback
+│   │   ├── branch-manager.ts              # git worktree create/delete, stale prune, default branch
 │   │   ├── env-filter.ts                  # strip Electron/Node/npm vars, merge project env
-│   │   ├── activity-detector.ts           # per-command-type activity detection (shell/claude/codex)
-│   │   ├── claude-hooks.ts                # generates Claude CLI hooks for activity fast-path
-│   │   └── command-detector.ts            # detects available CLI tools (claude, codex) on PATH
+│   │   ├── activity-detector.ts           # process-tree helpers + activity file reader
+│   │   ├── fs-utils.ts                    # findMostRecentFile helper
+│   │   ├── command-detector.ts            # detects available CLI tools (claude, codex) on PATH
+│   │   └── command-sessions/              # per-tool integration (CommandSession pattern)
+│   │       ├── command-session.ts         # CommandSession interface
+│   │       ├── index.ts                   # factory: createCommandSession(type)
+│   │       ├── shell-session.ts           # shell: process-tree activity, per-terminal HISTFILE
+│   │       ├── claude-session.ts          # Claude: hooks file, activity file, session file watcher
+│   │       └── codex-session.ts           # Codex: JSONL watcher, notify hook, UUID extraction
 │   │
 │   ├── preload/
 │   │   └── index.ts                       # contextBridge: ptermBridge
@@ -177,11 +184,11 @@ pterm/
 │   │   ├── store.ts                       # React context + useReducer: projects, terminals, settings
 │   │   ├── themes.ts                      # 10 built-in themes + custom theme support + resolver
 │   │   └── components/
-│   │       ├── Sidebar.tsx                # project list, Ctrl+wheel zoom, theme selectors
-│   │       ├── ProjectItem.tsx            # collapsible project with branch-grouped terminals
-│   │       ├── BranchGroup.tsx            # branch/folder node with git branch label, scoped [+]
+│   │       ├── Sidebar.tsx                # project list, Ctrl+wheel zoom, project drop zone
+│   │       ├── ProjectItem.tsx            # draggable project with branch groups, branch drop zone
+│   │       ├── BranchGroup.tsx            # draggable branch node (worktrees), terminal drop zone
 │   │       ├── BranchManager.tsx          # branch management dialog (checkout, delete worktrees)
-│   │       ├── TerminalTab.tsx            # terminal entry with status dot + close
+│   │       ├── TerminalTab.tsx            # draggable terminal entry with status dot + close
 │   │       ├── TerminalPane.tsx           # xterm.js viewport, copy/paste, Ctrl+wheel zoom, padding
 │   │       ├── CommandPicker.tsx          # modal: pick command + branch (main/existing/new)
 │   │       ├── ProjectConfigDialog.tsx    # edit name, folder, env, commands, terminal theme
@@ -225,6 +232,8 @@ All communication uses Electron's built-in IPC. No WebSocket needed.
 | `git:checkout` | Run `git checkout <branch>` in folder |
 | `git:watch-branch` | Start `fs.watch` on `.git/HEAD` for live branch detection |
 | `git:unwatch-branch` | Stop watching `.git/HEAD` |
+| `project:reorder` | Save project order (array of IDs, persisted to config.json) |
+| `branch:reorder` | Save branch order within a project (array of branch IDs) |
 
 ### Push Events (webContents.send → ipcRenderer.on)
 
@@ -267,13 +276,15 @@ Per-terminal scoped channels — no dispatch/filtering needed in renderer:
 - **Windows/Linux**: no menu bar
 - **Dev only**: Ctrl+Shift+I toggles DevTools (only when `VITE_DEV_SERVER_URL` is set)
 
-### Activity Detection
-- Poll every 2.5s per terminal, strategy depends on `CommandType`
-- **Shell strategy**: `pgrep -P <pid>` (Unix), PowerShell WMI (Windows) — detects child processes
-- **Claude strategy**: walks process tree to find Claude CLI, reads JSONL transcript from `~/.claude/sessions/` to determine state (idle → busy → working → waiting). Fast-path via `PTERM_ACTIVITY_FILE` written by Claude hooks.
-- **Codex strategy**: similar transcript-based detection from `~/.codex/sessions/`
-- 30s stale guard on activity files to detect crashed sessions
-- **Claude hooks** (`claude-hooks.ts`): generates temp hook config injected via env, writes activity state to per-terminal file on `UserPromptSubmit`, `PreToolUse`, `Stop` events
+### Activity Detection (CommandSession pattern)
+
+Each `CommandType` has a `CommandSession` implementation (`src/main/command-sessions/`) that encapsulates setup, command building, activity detection, session tracking, and cleanup. `terminal-manager.ts` operates against the `CommandSession` interface — no per-tool if/else branches.
+
+- Poll every 2.5s per terminal via `session.detectActivity(ptyPid)`
+- **ShellSession**: `pgrep -P <pid>` (Unix), PowerShell WMI (Windows) — detects child processes
+- **ClaudeSession**: writes hooks JSON file injected via `--settings` flag. Hooks write activity state to `$PTERM_ACTIVITY_FILE` on `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `SubagentStart/Stop`, `PreCompact/PostCompact`, `Stop` events. Session ID captured via `SessionStart` hook writing to `$PTERM_SESSION_FILE`. Falls back to process tree if activity file is stale.
+- **CodexSession**: injects `-c 'notify=...'` flag that writes "waiting" to activity file on agent-turn-complete. Tails JSONL session files in `~/.codex/sessions/` (seek-based, never re-reads from start) to extract granular state: `task_started` → working, `function_call` → using tools, `task_complete` → waiting. Extracts session UUID from `session_meta` event for resume support (`codex resume <UUID>`). Falls back to process tree with improved heuristic (codex running + no children = "waiting", not "busy").
+- 5-minute uniform staleness timeout on activity files (poll timer stops on process exit, so no risk of stale status on dead processes)
 - **Status dot colors**: green (working/busy), yellow (waiting for input), gray (idle/exited)
 - **Activity text**: shown as sub-text in sidebar terminal tabs ("Running", "Using tools", "Waiting for input", etc.)
 
@@ -323,8 +334,8 @@ Per-terminal scoped channels — no dispatch/filtering needed in renderer:
 4. Default command detection (check if codex/claude are on PATH)
 5. Clickable URLs in terminal output (xterm WebLinksAddon → openExternal)
 6. Terminal search (Ctrl+F with SearchBar component + xterm SearchAddon)
-7. Tab reordering via drag and drop
-8. Smart activity detection per command type (shell/claude/codex) with Claude hooks fast-path
+7. Drag-and-drop reordering for projects, worktree branches, and terminals — each with distinct colored drop indicators (blue/amber/cyan), group-specific MIME types to prevent cross-group drops, all orders persisted across restarts
+8. Smart activity detection via CommandSession abstraction (shell/claude/codex) — Claude hooks fast-path, Codex JSONL watcher + notify hook
 
 ### Phase 4: Branch-Aware Sidebar + Themes ✅
 1. Git branch detection IPC (`git:get-branch`, `git:checkout`, `git:watch-branch`, `git:unwatch-branch`)
@@ -332,13 +343,15 @@ Per-terminal scoped channels — no dispatch/filtering needed in renderer:
 3. `BranchGroup` component — collapsible branch nodes with git branch labels
 4. `ProjectItem` restructured to group terminals by branch
 5. `CommandPicker` updated — existing branch selection, `defaultBranchId` prop for scoped [+] buttons
-6. `BranchManager` dialog — switch branches on main folder, delete worktree branches
-7. Terminal padding (4px top/left/bottom)
-8. Terminal order persistence across restarts (saved in meta table)
-9. 10 built-in terminal color themes (VS Code Dark/Light, Dracula, Nord, Catppuccin Mocha, Solarized Dark/Light, Gruvbox Dark, Tokyo Night, Monokai)
-10. Per-project terminal theme override
-11. Custom theme editor with color pickers, hex inputs, and live preview
-12. `@types/react` and `@types/react-dom` v19 added for type checking
+6. `BranchManager` dialog — switch branches on main folder, delete worktree branches, autocomplete
+7. Branch creation from default branch (new branches based off origin/HEAD → main → master)
+8. Stale worktree pruning (`git worktree prune` before add, after failed remove)
+9. Terminal padding (4px top/left/bottom)
+10. Terminal order persistence across restarts (saved in meta table)
+11. 10 built-in terminal color themes (VS Code Dark/Light, Dracula, Nord, Catppuccin Mocha, Solarized Dark/Light, Gruvbox Dark, Tokyo Night, Monokai)
+12. Per-project terminal theme override
+13. Custom theme editor with color pickers, hex inputs, and live preview
+14. `@types/react` and `@types/react-dom` v19 added for type checking
 
 ### Phase 5: Packaging
 1. electron-builder config for Mac (dmg), Windows (NSIS), Linux (AppImage)
@@ -349,6 +362,6 @@ Per-terminal scoped channels — no dispatch/filtering needed in renderer:
 
 1. **Phase 1 done** ✅: Electron window opens, can spawn a PTY via IPC, type commands in devtools console
 2. **Phase 2 done** ✅: Full UI works — create project, open terminals, run commands, switch between them, font zoom, sidebar resize, copy/paste
-3. **Phase 3 done** ✅: Theme switching, keyboard shortcuts, terminal search, clickable URLs, drag-and-drop tab reordering, smart activity detection (shell/claude/codex), WSL2 + command detection
-4. **Phase 4 done** ✅: Branch-aware sidebar tree, live git branch detection, terminal themes (10 built-in + custom editor), per-project theme overrides, terminal padding, order persistence
+3. **Phase 3 done** ✅: Theme switching, keyboard shortcuts, terminal search, clickable URLs, drag-and-drop reordering (projects, branches, terminals with colored indicators), CommandSession-based activity detection (shell/claude/codex), WSL2 + command detection
+4. **Phase 4 done** ✅: Branch-aware sidebar tree, live git branch detection, terminal themes (10 built-in + custom editor), per-project theme overrides, terminal padding, order persistence, stale worktree pruning, branch creation from default branch
 5. **Phase 5 done**: Packaged app launches and works on target platform
