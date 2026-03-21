@@ -1,4 +1,17 @@
-export type ShellType = "default" | "bash" | "zsh" | "cmd" | "powershell" | "wsl";
+export type ShellType =
+	| "default"
+	| "bash"
+	| "zsh"
+	| "fish"
+	| "nushell"
+	| "elvish"
+	| "tcsh"
+	| "ksh"
+	| "dash"
+	| "cmd"
+	| "powershell"
+	| "pwsh"
+	| "wsl";
 
 export function makeTerminalKey(projectId: string, terminalId: string): string {
 	return `${projectId}:${terminalId}`;
@@ -14,6 +27,9 @@ export interface Command {
 	command: string;
 	type: CommandType;
 	shell?: ShellType;
+	customShell?: string;
+	enabled?: boolean;
+	builtin?: boolean;
 }
 
 export interface ProjectBranch {
@@ -36,6 +52,8 @@ export interface Project {
 	terminalTheme?: string;
 	/** Browser command override for this project */
 	browserCommand?: string;
+	/** IDs of default commands disabled for this project */
+	disabledDefaults?: string[];
 }
 
 export interface DetectedBrowser {
@@ -169,6 +187,7 @@ export interface ProjectCreateInput {
 	worktreeCopyFiles: string[];
 	terminalTheme?: string;
 	browserCommand?: string;
+	disabledDefaults?: string[];
 }
 
 export interface ProjectUpdateInput {
@@ -180,6 +199,7 @@ export interface ProjectUpdateInput {
 	worktreeCopyFiles?: string[];
 	terminalTheme?: string;
 	browserCommand?: string;
+	disabledDefaults?: string[];
 }
 
 export interface BranchCreateInput {
@@ -200,6 +220,11 @@ export interface DetectedCommand {
 	type: CommandType;
 }
 
+export interface DetectedShell {
+	type: ShellType;
+	name: string;
+}
+
 export interface SettingsUpdateInput {
 	fontSize?: number;
 	sidebarWidth?: number;
@@ -207,6 +232,7 @@ export interface SettingsUpdateInput {
 	terminalTheme?: string;
 	browserCommand?: string;
 	customThemes?: CustomTerminalTheme[];
+	defaultProjectCommands?: Command[];
 }
 
 export interface ActivityUpdate {
@@ -262,6 +288,7 @@ export interface PtermBridge {
 		openExternal: (url: string, browserCommand?: string) => Promise<void>;
 		detectWsl: () => Promise<string[]>;
 		detectCommands: () => Promise<DetectedCommand[]>;
+		detectShells: () => Promise<DetectedShell[]>;
 		detectBrowsers: () => Promise<DetectedBrowser[]>;
 		listDir: (folder: string, gitRoot?: string) => Promise<DirEntry[]>;
 	};

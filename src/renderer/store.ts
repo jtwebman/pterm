@@ -8,7 +8,13 @@ import {
 } from "react";
 import { createElement } from "react";
 
-import type { Project, TerminalSession, Activity, CustomTerminalTheme } from "../shared/types.js";
+import type {
+	Command,
+	Project,
+	TerminalSession,
+	Activity,
+	CustomTerminalTheme,
+} from "../shared/types.js";
 import { makeTerminalKey } from "../shared/types.js";
 import { bridge } from "./bridge.js";
 
@@ -27,6 +33,7 @@ export interface AppState {
 	customThemes: CustomTerminalTheme[];
 	branchNames: Record<string, string>;
 	pendingBranches: { projectId: string; name: string }[];
+	defaultProjectCommands: Command[];
 }
 
 const initialState: AppState = {
@@ -42,6 +49,7 @@ const initialState: AppState = {
 	customThemes: [],
 	branchNames: {},
 	pendingBranches: [],
+	defaultProjectCommands: [],
 };
 
 // Actions
@@ -67,7 +75,8 @@ export type AppAction =
 	| { type: "REORDER_TERMINAL"; draggedKey: string; beforeKey: string | null }
 	| { type: "SET_BRANCH_NAME"; folder: string; branchName: string }
 	| { type: "ADD_PENDING_BRANCH"; projectId: string; name: string }
-	| { type: "REMOVE_PENDING_BRANCH"; projectId: string; name: string };
+	| { type: "REMOVE_PENDING_BRANCH"; projectId: string; name: string }
+	| { type: "SET_DEFAULT_COMMANDS"; commands: Command[] };
 
 function reducer(state: AppState, action: AppAction): AppState {
 	switch (action.type) {
@@ -186,6 +195,8 @@ function reducer(state: AppState, action: AppAction): AppState {
 					(b) => !(b.projectId === action.projectId && b.name === action.name),
 				),
 			};
+		case "SET_DEFAULT_COMMANDS":
+			return { ...state, defaultProjectCommands: action.commands };
 		default:
 			return state;
 	}
@@ -254,6 +265,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
 				}
 				if (settings.customThemes?.length) {
 					dispatch({ type: "SET_CUSTOM_THEMES", customThemes: settings.customThemes });
+				}
+				if (settings.defaultProjectCommands?.length) {
+					dispatch({
+						type: "SET_DEFAULT_COMMANDS",
+						commands: settings.defaultProjectCommands,
+					});
 				}
 
 				const isDark = await bridge.theme.getNative();

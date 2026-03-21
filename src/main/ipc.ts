@@ -25,7 +25,7 @@ import { detectBrowsers } from "./browser-detector.js";
 import { detectCommands } from "./command-detector.js";
 import type { ConfigStore } from "./config-store.js";
 import type { SessionStore } from "./session-store.js";
-import { detectWslDistros } from "./shell-resolver.js";
+import { detectShells, detectWslDistros } from "./shell-resolver.js";
 import type { TerminalManager } from "./terminal-manager.js";
 
 const execFile = promisify(execFileCb);
@@ -55,7 +55,8 @@ export function registerIpcHandlers(
 			if (branch) cwd = branch.folder;
 		}
 
-		terminalManager.open(event.sender, input, project, cwd);
+		const defaults = configStore.getSettings().defaultProjectCommands;
+		terminalManager.open(event.sender, input, project, cwd, defaults);
 	});
 
 	ipcMain.handle("terminal:write", (_event, input: TerminalWriteInput) => {
@@ -380,6 +381,11 @@ export function registerIpcHandlers(
 			return result;
 		},
 	);
+
+	// Shell detection
+	ipcMain.handle("shell:detect-shells", () => {
+		return detectShells();
+	});
 
 	// WSL detection
 	ipcMain.handle("shell:detect-wsl", () => {

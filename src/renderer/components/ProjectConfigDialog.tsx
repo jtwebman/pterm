@@ -1,6 +1,12 @@
 import { useState, useEffect } from "react";
 
-import type { Project, Command, DetectedBrowser, DirEntry } from "../../shared/types.js";
+import type {
+	Project,
+	Command,
+	DetectedBrowser,
+	DetectedShell,
+	DirEntry,
+} from "../../shared/types.js";
 import { bridge } from "../bridge.js";
 import { useApp } from "../store.js";
 import { BUILTIN_THEMES } from "../themes.js";
@@ -34,27 +40,16 @@ export function ProjectConfigDialog({ project, onClose }: Props) {
 	const [browserCommand, setBrowserCommand] = useState(project?.browserCommand ?? "");
 	const [wslDistros, setWslDistros] = useState<string[]>([]);
 	const [detectedBrowsers, setDetectedBrowsers] = useState<DetectedBrowser[]>([]);
+	const [detectedShells, setDetectedShells] = useState<DetectedShell[]>([]);
 	const [fileBrowserOpen, setFileBrowserOpen] = useState(false);
+	const [disabledDefaults, setDisabledDefaults] = useState<Set<string>>(
+		new Set(project?.disabledDefaults ?? []),
+	);
 
 	useEffect(() => {
 		void bridge.shell.detectBrowsers().then(setDetectedBrowsers);
+		void bridge.shell.detectShells().then(setDetectedShells);
 	}, []);
-
-	useEffect(() => {
-		if (isEdit) return;
-		void bridge.shell.detectCommands().then((detected) => {
-			if (detected.length > 0) {
-				setCommands(
-					detected.map((d) => ({
-						id: crypto.randomUUID(),
-						name: d.name,
-						command: d.command,
-						type: d.type,
-					})),
-				);
-			}
-		});
-	}, [isEdit]);
 
 	useEffect(() => {
 		if (bridge.platform !== "win32") return;
@@ -74,6 +69,8 @@ export function ProjectConfigDialog({ project, onClose }: Props) {
 
 		const filteredCopyFiles = worktreeCopyFiles.filter((f) => f.trim());
 
+		const disabledArr = [...disabledDefaults];
+
 		if (isEdit && project) {
 			const updated = await bridge.project.update({
 				id: project.id,
@@ -84,6 +81,7 @@ export function ProjectConfigDialog({ project, onClose }: Props) {
 				worktreeCopyFiles: filteredCopyFiles,
 				terminalTheme: terminalTheme || undefined,
 				browserCommand: browserCommand || undefined,
+				disabledDefaults: disabledArr.length > 0 ? disabledArr : undefined,
 			});
 			dispatch({ type: "UPDATE_PROJECT", project: updated });
 		} else {
@@ -95,6 +93,7 @@ export function ProjectConfigDialog({ project, onClose }: Props) {
 				worktreeCopyFiles: filteredCopyFiles,
 				terminalTheme: terminalTheme || undefined,
 				browserCommand: browserCommand || undefined,
+				disabledDefaults: disabledArr.length > 0 ? disabledArr : undefined,
 			});
 			dispatch({ type: "ADD_PROJECT", project: created });
 		}
@@ -132,7 +131,7 @@ export function ProjectConfigDialog({ project, onClose }: Props) {
 	}
 	function updateCommand(index: number, field: keyof Command, value: string) {
 		const updated = [...commands];
-		updated[index] = { ...updated[index], [field]: value };
+		updated[index] = { ...updated[index], [field]: value || undefined };
 		setCommands(updated);
 	}
 	function removeCommand(index: number) {
@@ -336,9 +335,51 @@ export function ProjectConfigDialog({ project, onClose }: Props) {
 
 					{tab === "commands" && (
 						<div className="space-y-3">
-							<div className="flex items-center justify-between">
+							{/* Default commands (from settings) — toggleable per project */}
+							{state.defaultProjectCommands.filter((d) => d.enabled !== false).length > 0 && (
+								<>
+									<p className="text-xs text-gray-400 dark:text-gray-500">
+										Default commands — toggle off to hide from this project.
+									</p>
+									{state.defaultProjectCommands
+										.filter((d) => d.enabled !== false)
+										.map((cmd) => {
+											const disabled = disabledDefaults.has(cmd.id);
+											return (
+												<div
+													key={cmd.id}
+													className={`flex gap-2 items-center ${disabled ? "opacity-50" : ""}`}
+												>
+													<button
+														onClick={() => {
+															const next = new Set(disabledDefaults);
+															if (disabled) next.delete(cmd.id);
+															else next.add(cmd.id);
+															setDisabledDefaults(next);
+														}}
+														className={`w-4 h-4 rounded border shrink-0 ${
+															!disabled
+																? "bg-blue-500 border-blue-500"
+																: "border-gray-400 dark:border-gray-600"
+														}`}
+														title={disabled ? "Enable" : "Disable"}
+													/>
+													<span className="w-1/5 text-sm text-gray-500 dark:text-gray-400 truncate">
+														{cmd.name}
+													</span>
+													<span className="flex-1 text-sm text-gray-400 dark:text-gray-500 truncate">
+														{cmd.command || "(shell)"}
+													</span>
+												</div>
+											);
+										})}
+								</>
+							)}
+
+							{/* Project-specific commands */}
+							<div className="flex items-center justify-between mt-2">
 								<p className="text-xs text-gray-400 dark:text-gray-500">
-									Define commands that can launch as terminals. Empty command = interactive shell.
+									Project commands — only available in this project.
 								</p>
 								<button
 									onClick={addCommand}
@@ -353,7 +394,7 @@ export function ProjectConfigDialog({ project, onClose }: Props) {
 										type="text"
 										value={cmd.name}
 										onChange={(e) => updateCommand(i, "name", e.target.value)}
-										className="w-1/3 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded px-2 py-1.5 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-blue-500"
+										className="w-1/5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded px-2 py-1.5 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-blue-500"
 										placeholder="Name"
 									/>
 									<input
@@ -363,6 +404,21 @@ export function ProjectConfigDialog({ project, onClose }: Props) {
 										className="flex-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded px-2 py-1.5 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-blue-500"
 										placeholder="Command (empty = shell)"
 									/>
+									<select
+										value={cmd.shell ?? "default"}
+										onChange={(e) => {
+											const val = e.target.value;
+											updateCommand(i, "shell", val === "default" ? "" : val);
+										}}
+										className="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded px-2 py-1.5 text-xs text-gray-500 dark:text-gray-400 focus:outline-none focus:border-blue-500"
+									>
+										{detectedShells.map((s) => (
+											<option key={s.type} value={s.type}>
+												{s.name}
+											</option>
+										))}
+										{detectedShells.length === 0 && <option value="default">Default</option>}
+									</select>
 									<button
 										onClick={() => removeCommand(i)}
 										className="text-gray-400 dark:text-gray-500 hover:text-red-400 px-1"
@@ -373,7 +429,7 @@ export function ProjectConfigDialog({ project, onClose }: Props) {
 							))}
 							{commands.length === 0 && (
 								<div className="text-sm text-gray-400 dark:text-gray-500 text-center py-4">
-									No commands configured
+									No project-specific commands
 								</div>
 							)}
 						</div>

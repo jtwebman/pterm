@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 
-import type { Project } from "../../shared/types.js";
+import type { Command, Project } from "../../shared/types.js";
 import { makeTerminalKey } from "../../shared/types.js";
 import { useApp } from "../store.js";
 
@@ -15,14 +15,21 @@ interface Props {
 
 export function CommandPicker({ project, asModal, onClose, defaultBranchId }: Props) {
 	const [open, setOpen] = useState(false);
-	const [selectedCommandId, setSelectedCommandId] = useState<string>(project.commands[0]?.id ?? "");
 	const branchScoped = defaultBranchId !== undefined;
-	const { dispatch } = useApp();
+	const { state, dispatch } = useApp();
+
+	// Show all default commands + project-specific commands.
+	// Visibility is controlled by toggles in Settings and Project Config, not here.
+	const commands: Command[] = useMemo(() => {
+		return [...state.defaultProjectCommands, ...project.commands];
+	}, [project.commands, state.defaultProjectCommands]);
+
+	const [selectedCommandId, setSelectedCommandId] = useState<string>(commands[0]?.id ?? "");
 
 	const isOpen = asModal || open;
 
 	function reset() {
-		setSelectedCommandId(project.commands[0]?.id ?? "");
+		setSelectedCommandId(commands[0]?.id ?? "");
 		if (asModal) {
 			onClose?.();
 		} else {
@@ -31,7 +38,7 @@ export function CommandPicker({ project, asModal, onClose, defaultBranchId }: Pr
 	}
 
 	async function handleLaunch() {
-		const command = project.commands.find((c) => c.id === selectedCommandId);
+		const command = commands.find((c) => c.id === selectedCommandId);
 		if (!command) return;
 
 		const branchId = branchScoped && defaultBranchId ? defaultBranchId : undefined;
@@ -77,11 +84,11 @@ export function CommandPicker({ project, asModal, onClose, defaultBranchId }: Pr
 					{/* Command */}
 					<div>
 						<label className="block text-xs text-gray-500 dark:text-gray-400 mb-1.5">Command</label>
-						{project.commands.length === 0 ? (
+						{commands.length === 0 ? (
 							<div className="text-sm text-gray-400 dark:text-gray-500">No commands configured</div>
 						) : (
 							<div className="space-y-1">
-								{project.commands.map((cmd) => (
+								{commands.map((cmd) => (
 									<button
 										key={cmd.id}
 										onClick={() => setSelectedCommandId(cmd.id)}

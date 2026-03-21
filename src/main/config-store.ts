@@ -24,7 +24,38 @@ function defaultConfig(): Config {
 			sidebarWidth: 250,
 			fontSize: 12,
 			defaultProjectCommands: [
-				{ id: crypto.randomUUID(), name: "Shell", command: "", type: "shell" },
+				{
+					id: "builtin-shell",
+					name: "Shell",
+					command: "",
+					type: "shell",
+					builtin: true,
+					enabled: true,
+				},
+				{
+					id: "builtin-claude",
+					name: "Claude Code",
+					command: "claude",
+					type: "claude",
+					builtin: true,
+					enabled: true,
+				},
+				{
+					id: "builtin-codex",
+					name: "Codex",
+					command: "codex",
+					type: "codex",
+					builtin: true,
+					enabled: true,
+				},
+				{
+					id: "builtin-opencode",
+					name: "OpenCode",
+					command: "opencode",
+					type: "opencode",
+					builtin: true,
+					enabled: true,
+				},
 			],
 		},
 	};
@@ -95,6 +126,7 @@ export class ConfigStore {
 			worktreeCopyFiles: input.worktreeCopyFiles,
 			terminalTheme: input.terminalTheme,
 			browserCommand: input.browserCommand,
+			disabledDefaults: input.disabledDefaults,
 		};
 		this.config.projects.push(project);
 		this.scheduleSave();
@@ -112,6 +144,7 @@ export class ConfigStore {
 		if (input.worktreeCopyFiles !== undefined) project.worktreeCopyFiles = input.worktreeCopyFiles;
 		if (input.terminalTheme !== undefined) project.terminalTheme = input.terminalTheme;
 		if (input.browserCommand !== undefined) project.browserCommand = input.browserCommand;
+		if (input.disabledDefaults !== undefined) project.disabledDefaults = input.disabledDefaults;
 
 		this.scheduleSave();
 		return project;
@@ -141,6 +174,8 @@ export class ConfigStore {
 		if (input.browserCommand !== undefined)
 			this.config.settings.browserCommand = input.browserCommand;
 		if (input.customThemes !== undefined) this.config.settings.customThemes = input.customThemes;
+		if (input.defaultProjectCommands !== undefined)
+			this.config.settings.defaultProjectCommands = input.defaultProjectCommands;
 		this.scheduleSave();
 		return this.config.settings;
 	}

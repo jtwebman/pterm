@@ -71,6 +71,7 @@ contextBridge.exposeInMainWorld("ptermBridge", {
 			ipcRenderer.invoke("shell:open-external", url, browserCommand),
 		detectWsl: () => ipcRenderer.invoke("shell:detect-wsl"),
 		detectCommands: () => ipcRenderer.invoke("shell:detect-commands"),
+		detectShells: () => ipcRenderer.invoke("shell:detect-shells"),
 		detectBrowsers: () => ipcRenderer.invoke("shell:detect-browsers"),
 		listDir: (folder: string, gitRoot?: string) =>
 			ipcRenderer.invoke("shell:list-dir", folder, gitRoot),

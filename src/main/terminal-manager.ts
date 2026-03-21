@@ -5,7 +5,13 @@ import path from "node:path";
 import type { WebContents } from "electron";
 import * as pty from "node-pty";
 
-import type { TerminalOpenInput, Project, CommandType, Activity } from "../shared/types.js";
+import type {
+	TerminalOpenInput,
+	Project,
+	Command,
+	CommandType,
+	Activity,
+} from "../shared/types.js";
 import { detectActivity } from "./activity-detector.js";
 import type { AiSessionTracker } from "./ai-session-tracker.js";
 import { writeClaudeHooksFile, cleanupClaudeHooksFile } from "./claude-hooks.js";
@@ -74,9 +80,16 @@ export class TerminalManager {
 		this.aiSessionTracker = tracker;
 	}
 
-	open(webContents: WebContents, input: TerminalOpenInput, project: Project, cwd: string): void {
+	open(
+		webContents: WebContents,
+		input: TerminalOpenInput,
+		project: Project,
+		cwd: string,
+		defaultCommands?: Command[],
+	): void {
 		const command = input.commandId
-			? project.commands.find((c) => c.id === input.commandId)
+			? (project.commands.find((c) => c.id === input.commandId) ??
+				defaultCommands?.find((c) => c.id === input.commandId))
 			: undefined;
 
 		const commandName = command?.name ?? "Shell";
