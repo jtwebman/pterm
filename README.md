@@ -28,7 +28,7 @@ pterm gives every project its own workspace with terminals, environment variable
 ### Git Integration
 
 - **Git worktree branches** — create isolated worktree copies of your project to work on multiple features in parallel without conflicts
-- **Worktree file copying** — configurable glob patterns to copy files (`.env`, `node_modules`, etc.) into new worktrees
+- **Worktree file copying** — add glob patterns to copy gitignored files (`.env`, `node_modules`, etc.) into new worktrees on top of what git worktree provides
 - **Live branch detection** — sidebar shows the current git branch for each folder, updates in real time via `.git/HEAD` file watcher (no polling)
 - **Branch management dialog** — switch branches on the main folder, create new worktree branches with autocomplete, delete worktrees with cleanup
 - **Branch creation from default branch** — new branches are based off `origin/HEAD`, `main`, or `master` automatically
@@ -41,7 +41,6 @@ pterm gives every project its own workspace with terminals, environment variable
 - **Terminal search** — Ctrl+F opens a search bar with match highlighting, next/previous navigation, and match count
 - **Clickable URLs** — links in terminal output open in your default browser
 - **Font zoom** — Ctrl+wheel to zoom terminal font size (6-32px range), persisted across restarts
-- **Terminal padding** — comfortable 4px padding on top, left, and bottom edges
 
 ### Smart Activity Detection
 
@@ -58,7 +57,7 @@ pterm gives every project its own workspace with terminals, environment variable
 - **10 built-in terminal themes** — VS Code Dark, VS Code Light, Dracula, Nord, Catppuccin Mocha, Solarized Dark, Solarized Light, Gruvbox Dark, Tokyo Night, Monokai
 - **Per-project theme override** — set a different terminal color theme for each project
 - **Custom theme editor** — create your own themes with color pickers, hex inputs, and live preview
-- **System theme sync** — follows your OS dark/light preference, or force dark/light mode
+- **System theme sync** — sidebar and UI follow your OS dark/light preference, or force dark/light mode
 - **Default theme setting** — set a global default terminal theme in settings
 
 ### Sidebar and Organization
@@ -72,11 +71,10 @@ pterm gives every project its own workspace with terminals, environment variable
 
 ### Cross-Platform
 
-- **macOS** — zsh or bash, native app menu (About, Hide, Quit, Copy, Paste, Select All)
-- **Windows** — cmd, PowerShell, or WSL2 (auto-detects available WSL distros)
-- **Linux** — bash or zsh
-- **Shell fallback chains** — `$SHELL` → `/bin/zsh` → `/bin/bash` → `/bin/sh` (Unix), `ComSpec` → `powershell.exe` → `cmd.exe` (Windows)
-- **Per-command shell override** — each command can specify which shell to use
+- **macOS** — native app menu, uses your default shell
+- **Windows** — cmd, PowerShell, and WSL2 (auto-detects available WSL distros)
+- **Linux** — uses your default shell
+- **Any shell** — automatically detects your default shell, or override per-command with bash, zsh, cmd, PowerShell, or WSL
 - **Configurable browser** — choose which browser opens for terminal URLs
 
 ### Keyboard Shortcuts
